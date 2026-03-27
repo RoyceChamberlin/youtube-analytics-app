@@ -41,7 +41,13 @@ if os.path.exists("channels.json"):
             loaded = json.load(f)
             for k, v in loaded.items():
                 df = pd.read_json(v["data"]) if v.get("data") else None
-                st.session_state.channels[k] = {"id": v["id"], "data": df, "channel_stats": v.get("channel_stats", {})}
+                if df is not None and not df.empty:
+                    df["Published"] = pd.to_datetime(df["Published"], errors='coerce')
+                st.session_state.channels[k] = {
+                    "id": v["id"], 
+                    "data": df, 
+                    "channel_stats": v.get("channel_stats", {})
+                }
                 st.session_state.notes[k] = v.get("notes", "")
     except:
         pass
@@ -81,8 +87,6 @@ tab_all, tab_detail = st.tabs(["All Channels Overview", "Channel Detail"])
 # ==================== ALL CHANNELS OVERVIEW ====================
 with tab_all:
     st.subheader("All Channels Summary")
-    if st.button("Refresh All Channels"):
-        st.rerun()  # Will trigger refresh in detail view logic too
 
     summary_data = []
     for name, info in st.session_state.channels.items():
@@ -98,9 +102,9 @@ with tab_all:
         summary_data.append(row)
 
     summary_df = pd.DataFrame(summary_data)
-    st.dataframe(summary_df.sort_values("Total Views", ascending=False), use_container_width=True)
-
     if not summary_df.empty:
+        st.dataframe(summary_df.sort_values("Total Views", ascending=False), use_container_width=True)
+
         csv_all = summary_df.to_csv(index=False).encode()
         st.download_button("Export All Channels Summary (CSV)", csv_all, "all_channels_summary.csv", "text/csv")
 
@@ -114,11 +118,11 @@ with tab_detail:
     st.caption(f"Channel ID: {channel_id}")
 
     # Refresh button
-    if st.button("Refresh Data for This Channel", type="primary") or channel_info["data"] is None:
+    if st.button("Refresh Data for This Channel", type="primary") or channel_info.get("data") is None:
         with st.spinner("Fetching latest data..."):
             youtube = build("youtube", "v3", developerKey=API_KEY)
             
-            # Channel stats (including subscribers)
+            # Channel stats
             ch_resp = youtube.channels().list(part="snippet,statistics,contentDetails", id=channel_id).execute()
             ch = ch_resp["items"][0]
             subscriber_count = int(ch["statistics"].get("subscriberCount", 0))
@@ -129,27 +133,38 @@ with tab_detail:
             videos = []
             next_page = None
             for _ in range(2):
-                pl_resp = youtube.playlistItems().list(part="contentDetails", playlistId=uploads_id, maxResults=50, pageToken=next_page).execute()
+                pl_resp = youtube.playlistItems().list(
+                    part="contentDetails", 
+                    playlistId=uploads_id, 
+                    maxResults=50, 
+                    pageToken=next_page
+                ).execute()
                 video_ids = [item["contentDetails"]["videoId"] for item in pl_resp["items"]]
-                vid_resp = youtube.videos().list(part="snippet,statistics", id=",".join(video_ids)).execute()
+                vid_resp = youtube.videos().list(
+                    part="snippet,statistics", 
+                    id=",".join(video_ids)
+                ).execute()
                 for item in vid_resp["items"]:
                     stats = item["statistics"]
                     snippet = item["snippet"]
                     videos.append({
                         "Title": snippet["title"],
-                        "Published": pd.to_datetime(snippet["publishedAt"][:10]),
+                        "Published": snippet["publishedAt"][:10],
                         "Views": int(stats.get("viewCount", 0)),
                         "Likes": int(stats.get("likeCount", 0)),
                         "Comments": int(stats.get("commentCount", 0)),
                         "URL": f"https://youtu.be/{item['id']}"
                     })
                 next_page = pl_resp.get("nextPageToken")
-                if not next_page: break
+                if not next_page: 
+                    break
 
             df = pd.DataFrame(videos)
             if not df.empty:
+                df["Published"] = pd.to_datetime(df["Published"])
                 df = df.sort_values("Published", ascending=False)
-                # Add calculated metrics
+                
+                # Calculated metrics
                 df["Days Since Publish"] = (datetime.now() - df["Published"]).dt.days
                 df["Views per Day"] = (df["Views"] / df["Days Since Publish"].replace(0, 1)).round(1)
                 df["Like Rate %"] = (df["Likes"] / df["Views"].replace(0, 1) * 100).round(2)
@@ -160,7 +175,8 @@ with tab_detail:
                 "subscribers": subscriber_count,
                 "total_views": total_views
             }
-            # Save
+
+            # Save everything
             save_data = {}
             for k, v in st.session_state.channels.items():
                 save_data[k] = {
@@ -186,13 +202,15 @@ with tab_detail:
 
         detail_tabs = st.tabs(["Video Table", "Performance Charts", "Upload Timing", "Grok Video Ideas", "Team Notes"])
 
-        with detail_tabs[0]:  # Video Table
-            st.dataframe(df[["Title", "Published", "Views", "Views per Day", "Like Rate %", "Comment Rate %", "URL"]].sort_values("Views", ascending=False),
-                         use_container_width=True, hide_index=True)
+        with detail_tabs[0]:
+            display_df = df[["Title", "Published", "Views", "Views per Day", "Like Rate %", "Comment Rate %", "URL"]].copy()
+            display_df["Published"] = display_df["Published"].dt.strftime("%Y-%m-%d")
+            st.dataframe(display_df.sort_values("Views", ascending=False), use_container_width=True, hide_index=True)
+            
             csv = df.to_csv(index=False).encode()
             st.download_button("Export This Channel Videos (CSV)", csv, f"{selected}_videos.csv", "text/csv")
 
-        with detail_tabs[1]:  # Charts
+        with detail_tabs[1]:
             top = df.nlargest(10, "Views")
             fig1 = px.bar(top, x="Views", y="Title", orientation="h", title="Top 10 Videos")
             st.plotly_chart(fig1, use_container_width=True)
@@ -200,49 +218,56 @@ with tab_detail:
             fig2 = px.line(df.sort_values("Published"), x="Published", y="Views", title="Views Over Time", markers=True)
             st.plotly_chart(fig2, use_container_width=True)
 
-        with detail_tabs[2]:  # Upload Timing
-            st.write("**Upload Timing Analysis** (based on your data)")
-            df["Day of Week"] = df["Published"].dt.day_name()
-            df["Hour"] = df["Published"].dt.hour
+        with detail_tabs[2]:  # Fixed Upload Timing
+            st.write("**Upload Timing Analysis**")
             
-            day_perf = df.groupby("Day of Week")["Views"].mean().round(0).sort_values(ascending=False)
+            # Ensure datetime before using .dt
+            temp_df = df.copy()
+            if not pd.api.types.is_datetime64_any_dtype(temp_df["Published"]):
+                temp_df["Published"] = pd.to_datetime(temp_df["Published"], errors='coerce')
+            
+            temp_df["Day of Week"] = temp_df["Published"].dt.day_name()
+            temp_df["Hour"] = temp_df["Published"].dt.hour
+            
+            day_perf = temp_df.groupby("Day of Week")["Views"].mean().round(0).sort_values(ascending=False)
             st.bar_chart(day_perf, x_label="Day of Week", y_label="Average Views")
 
-            st.write("**Best upload times from your data:**")
+            st.write("**Best upload days from your data:**")
             st.write(day_perf.head(3))
 
-            st.info("General 2026 recommendation: Mid-week (Tuesday–Thursday) afternoons (3–5 PM local time) often perform well. Test against your own patterns.")
+            st.info("General recommendation: Tuesday–Thursday afternoons often perform well. Always test against your own channel data.")
 
-        with detail_tabs[3]:  # Grok Video Ideas
+        with detail_tabs[3]:
             st.write("**Grok Channel Analysis & Strategic Ideas**")
             if st.button("Generate New Video Ideas", type="primary"):
-                with st.spinner("Analyzing entire channel performance..."):
+                with st.spinner("Analyzing entire channel..."):
                     all_titles = " | ".join(df["Title"].tolist())
                     words = re.findall(r'\b[a-zA-Z]{4,}\b', all_titles.lower())
                     common = Counter(words).most_common(12)
                     top_topics = [w[0] for w in common[:8]]
 
-                    st.write("**Detected Strong Topics:**", ", ".join(top_topics))
+                    st.write("**Strong Topics Detected:**", ", ".join(top_topics))
 
-                    st.write("\n**Recommended Video Ideas** (tailored to your channel history):")
+                    st.write("\n**Recommended Video Ideas:**")
                     ideas = [
                         f"1. Complete {top_topics[0].title()} Guide for 2026 – What Actually Works Now",
-                        f"2. How We Improved Our {top_topics[1].title()} Results (Step-by-Step Breakdown)",
-                        f"3. Top 7 Mistakes Creators Make with {top_topics[2].title()} (And How to Fix Them)",
-                        f"4. {top_topics[0].title()} vs {top_topics[3].title()} – Real Performance Comparison",
-                        f"5. Advanced {top_topics[4].title()} Tips That Increased Our Views by X%"
+                        f"2. How We Improved Our {top_topics[1].title()} Results (Step-by-Step)",
+                        f"3. Top 7 Mistakes Creators Make with {top_topics[2].title()} (And Fixes)",
+                        f"4. {top_topics[0].title()} vs {top_topics[3].title()} – Real Comparison",
+                        f"5. Advanced {top_topics[4].title()} Tips That Increased Our Views"
                     ]
                     for idea in ideas:
                         st.write(idea)
 
-                    st.info("These ideas are generated by looking at every video title and performance metric on this channel. Focus on formats and topics that already win for you.")
+                    st.info("Ideas are based on every video title and performance metric from this channel.")
 
-        with detail_tabs[4]:  # Team Notes
-            st.write("**Team Notes** (visible to everyone)")
-            notes = st.text_area("Add notes or ideas for the team", value=st.session_state.notes.get(selected, ""), height=200)
+        with detail_tabs[4]:
+            st.write("**Team Notes**")
+            notes = st.text_area("Add notes or ideas for the team", 
+                                value=st.session_state.notes.get(selected, ""), height=200)
             if st.button("Save Notes"):
                 st.session_state.notes[selected] = notes
-                # Save to file too
+                # Save
                 save_data = {}
                 for k, v in st.session_state.channels.items():
                     save_data[k] = {
@@ -258,4 +283,4 @@ with tab_detail:
     else:
         st.info("Click 'Refresh Data for This Channel' to load statistics.")
 
-st.caption("YouTube Team Command Center • Built to help your team consistently improve video performance")
+st.caption("YouTube Team Command Center • Designed to help your team improve video performance")
