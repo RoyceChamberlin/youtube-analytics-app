@@ -875,15 +875,21 @@ with T_DETAIL:
         monthly = ch_df.copy()
         monthly["Month"] = monthly["Published"].dt.to_period("M").astype(str)
         freq = monthly.groupby("Month").agg(Videos=("Title","count"), Avg_Views=("Views","mean")).reset_index()
-        fig2 = go.Figure()
-        fig2.add_trace(go.Bar(x=freq["Month"], y=freq["Videos"], name="Videos Posted", marker_color="#252525", marker_line_width=0))
-        fig2.add_trace(go.Scatter(x=freq["Month"], y=freq["Avg_Views"], name="Avg Views", yaxis="y2",
-                                  line=dict(color="#ff0033",width=2), marker=dict(color="#ff0033",size=5)))
-        PLOTLY_NO_AXES = {k: v for k, v in PLOTLY.items() if k not in ("xaxis", "yaxis")}
-        fig2.update_layout(**PLOTLY_NO_AXES, title="Upload Frequency vs Avg Views",
-                           yaxis2=dict(overlaying="y",side="right",gridcolor="#1e1e1e",color="#737373"),
-                           legend=dict(orientation="h",y=1.1))
-        st.plotly_chart(fig2, use_container_width=True)
+        freq["Avg_Views"] = freq["Avg_Views"].round(0).astype(int)
+
+        fa, fb = st.columns(2)
+        with fa:
+            fig_freq = px.bar(freq, x="Month", y="Videos", title="Videos Posted per Month",
+                              labels={"Videos":"Videos Posted","Month":""})
+            fig_freq.update_traces(marker_color="#2a2a2a", marker_line_width=0)
+            fig_freq.update_layout(**PLOTLY)
+            st.plotly_chart(fig_freq, use_container_width=True)
+        with fb:
+            fig_avgv = px.line(freq, x="Month", y="Avg_Views", title="Avg Views per Month",
+                               labels={"Avg_Views":"Avg Views","Month":""}, markers=True)
+            fig_avgv.update_traces(line_color="#ff0033", marker_color="#ff0033", marker_size=6)
+            fig_avgv.update_layout(**PLOTLY)
+            st.plotly_chart(fig_avgv, use_container_width=True)
 
     # ── CONTENT SERIES ──
     with DT4:
