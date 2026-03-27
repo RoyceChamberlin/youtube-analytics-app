@@ -1,3 +1,8 @@
+"""
+Chamberlin Media Monitor
+Streamlit Cloud-ready • YouTube Data API v3 • Claude AI
+"""
+
 import streamlit as st
 import pandas as pd
 from googleapiclient.discovery import build
@@ -7,12 +12,15 @@ from collections import Counter
 import re
 import json
 import os
-from datetime import datetime, timedelta
 import time
+import anthropic
+from datetime import datetime, timedelta
+import sqlite3
+import contextlib
 
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 # PAGE CONFIG
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Chamberlin Media Monitor",
     page_icon="▶",
@@ -20,992 +28,976 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ─────────────────────────────────────────────
-# GLOBAL STYLES — YouTube Studio dark aesthetic
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+# DESIGN SYSTEM
+# ─────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
-/* ── Base ── */
+*, *::before, *::after { box-sizing: border-box; }
+
+:root {
+    --bg:           #0a0a0a;
+    --bg-2:         #111111;
+    --bg-3:         #181818;
+    --bg-4:         #1f1f1f;
+    --border:       #252525;
+    --border-2:     #2e2e2e;
+    --text:         #e8e8e8;
+    --text-muted:   #737373;
+    --text-dim:     #4a4a4a;
+    --red:          #ff0033;
+    --red-dim:      #8b0000;
+    --red-glow:     rgba(255,0,51,0.15);
+    --blue:         #1e8fff;
+    --green:        #1db954;
+    --yellow:       #f5a623;
+    --font:         'Instrument Sans', sans-serif;
+    --font-mono:    'JetBrains Mono', monospace;
+    --radius:       10px;
+    --radius-sm:    6px;
+}
+
 html, body, [class*="css"] {
-    font-family: 'DM Sans', sans-serif;
-}
-.stApp {
-    background-color: #0f0f0f;
-    color: #e0e0e0;
+    font-family: var(--font);
+    background-color: var(--bg) !important;
+    color: var(--text);
 }
 
-/* ── Sidebar ── */
+.stApp { background: var(--bg) !important; }
+.main .block-container { padding: 2rem 2.5rem 4rem !important; max-width: 1400px; }
+
 [data-testid="stSidebar"] {
-    background-color: #111111 !important;
-    border-right: 1px solid #222;
+    background: var(--bg-2) !important;
+    border-right: 1px solid var(--border) !important;
 }
-[data-testid="stSidebar"] .block-container {
-    padding: 1.5rem 1rem;
-}
+[data-testid="stSidebar"] > div { padding: 0 !important; }
+[data-testid="stSidebar"] .block-container { padding: 1.5rem 1.2rem 2rem !important; }
 
-/* ── Headers ── */
-h1 { color: #ffffff; font-weight: 700; font-size: 26px; letter-spacing: -0.5px; margin-bottom: 0 !important; }
-h2 { color: #f1f1f1; font-weight: 600; font-size: 18px; }
-h3 { color: #e0e0e0; font-weight: 500; font-size: 15px; }
+h1 { font-family: var(--font); font-weight: 700; font-size: 22px; letter-spacing: -0.3px; color: #fff !important; margin: 0 !important; padding: 0 !important; }
+h2 { font-family: var(--font); font-weight: 600; font-size: 17px; color: #fff !important; margin-bottom: 4px !important; }
+h3 { font-family: var(--font); font-weight: 500; font-size: 14px; color: var(--text-muted) !important; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px !important; }
+p, li { font-size: 14px; line-height: 1.6; }
 
-/* ── Metric cards ── */
 [data-testid="metric-container"] {
-    background: #1a1a1a;
-    border: 1px solid #2a2a2a;
-    border-radius: 10px;
-    padding: 16px 20px !important;
+    background: var(--bg-3) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius) !important;
+    padding: 20px 22px !important;
+    transition: border-color 0.2s;
 }
+[data-testid="metric-container"]:hover { border-color: var(--border-2) !important; }
 [data-testid="metric-container"] label {
-    color: #909090 !important;
-    font-size: 12px !important;
+    font-family: var(--font-mono) !important;
+    color: var(--text-muted) !important;
+    font-size: 10px !important;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-[data-testid="metric-container"] [data-testid="stMetricValue"] {
-    color: #ffffff !important;
-    font-size: 26px !important;
-    font-weight: 700 !important;
-}
-[data-testid="metric-container"] [data-testid="stMetricDelta"] {
-    font-size: 12px !important;
-}
-
-/* ── Buttons ── */
-.stButton > button {
-    background-color: #ff0000;
-    color: #ffffff;
-    border: none;
-    border-radius: 6px;
-    font-family: 'DM Sans', sans-serif;
-    font-weight: 600;
-    font-size: 13px;
-    padding: 8px 18px;
-    transition: background 0.15s;
-}
-.stButton > button:hover {
-    background-color: #cc0000;
-    color: #fff;
-    border: none;
-}
-.stButton > button[kind="secondary"] {
-    background-color: #2a2a2a;
-    color: #e0e0e0;
-}
-.stButton > button[kind="secondary"]:hover {
-    background-color: #383838;
-}
-
-/* ── Inputs ── */
-.stTextInput > div > input,
-.stTextArea > div > textarea,
-.stSelectbox > div > div {
-    background-color: #1a1a1a !important;
-    border: 1px solid #333 !important;
-    border-radius: 8px !important;
-    color: #e0e0e0 !important;
-    font-family: 'DM Sans', sans-serif !important;
-}
-.stSelectbox > div > div:hover {
-    border-color: #ff0000 !important;
-}
-
-/* ── Tabs ── */
-[data-testid="stTabs"] [role="tablist"] {
-    border-bottom: 1px solid #2a2a2a;
-    gap: 0;
-}
-[data-testid="stTabs"] button[role="tab"] {
-    background: transparent;
-    border: none;
-    border-bottom: 2px solid transparent;
-    color: #909090;
-    font-family: 'DM Sans', sans-serif;
+    letter-spacing: 1px;
     font-weight: 500;
-    font-size: 13px;
-    padding: 10px 18px;
-    border-radius: 0;
-    transition: all 0.15s;
 }
-[data-testid="stTabs"] button[role="tab"]:hover {
-    color: #e0e0e0;
-    background: #1a1a1a;
-}
-[data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
-    color: #ff0000;
-    border-bottom: 2px solid #ff0000;
-    background: transparent;
-}
+[data-testid="stMetricValue"] { font-family: var(--font) !important; color: #fff !important; font-size: 28px !important; font-weight: 700 !important; letter-spacing: -0.5px; }
+[data-testid="stMetricDelta"] { font-size: 12px !important; }
 
-/* ── Dataframe ── */
-[data-testid="stDataFrame"] {
-    border: 1px solid #2a2a2a;
-    border-radius: 8px;
-    overflow: hidden;
+.stButton > button {
+    font-family: var(--font) !important;
+    font-weight: 600 !important;
+    font-size: 13px !important;
+    border-radius: var(--radius-sm) !important;
+    border: none !important;
+    padding: 9px 18px !important;
+    transition: all 0.15s ease !important;
+    cursor: pointer;
 }
-[data-testid="stDataFrame"] thead tr th {
-    background: #1a1a1a !important;
-    color: #909090 !important;
-    font-size: 11px !important;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid #2a2a2a !important;
-}
-[data-testid="stDataFrame"] tbody tr:hover td {
-    background: #1e1e1e !important;
-}
+.stButton > button[kind="primary"] { background: var(--red) !important; color: #fff !important; }
+.stButton > button[kind="primary"]:hover { background: #cc0029 !important; box-shadow: 0 0 20px var(--red-glow) !important; }
+.stButton > button[kind="secondary"] { background: var(--bg-4) !important; color: var(--text) !important; border: 1px solid var(--border-2) !important; }
+.stButton > button[kind="secondary"]:hover { background: var(--bg-3) !important; border-color: #444 !important; }
 
-/* ── Expander ── */
-.streamlit-expanderHeader {
-    background-color: #1a1a1a !important;
-    border: 1px solid #2a2a2a !important;
-    border-radius: 8px !important;
-    color: #e0e0e0 !important;
-    font-weight: 500 !important;
+.stTextInput > div > input,
+.stTextArea > div > textarea {
+    background: var(--bg-3) !important;
+    border: 1px solid var(--border-2) !important;
+    border-radius: var(--radius-sm) !important;
+    color: var(--text) !important;
+    font-family: var(--font) !important;
+    font-size: 13px !important;
+    transition: border-color 0.15s;
 }
+.stTextInput > div > input:focus,
+.stTextArea > div > textarea:focus { border-color: var(--red) !important; box-shadow: 0 0 0 3px var(--red-glow) !important; }
+.stSelectbox > div > div { background: var(--bg-3) !important; border: 1px solid var(--border-2) !important; border-radius: var(--radius-sm) !important; color: var(--text) !important; font-family: var(--font) !important; font-size: 13px !important; }
+label { color: var(--text-muted) !important; font-size: 12px !important; font-weight: 500 !important; letter-spacing: 0.3px; }
 
-/* ── Alerts ── */
-.stAlert {
-    background-color: #1a1a1a;
-    border: 1px solid #2a2a2a;
-    border-radius: 8px;
-}
+[data-testid="stTabs"] [role="tablist"] { border-bottom: 1px solid var(--border) !important; background: transparent !important; gap: 0 !important; padding: 0 !important; }
+[data-testid="stTabs"] button[role="tab"] { font-family: var(--font) !important; font-size: 13px !important; font-weight: 500 !important; color: var(--text-muted) !important; background: transparent !important; border: none !important; border-bottom: 2px solid transparent !important; border-radius: 0 !important; padding: 12px 20px !important; transition: all 0.15s !important; }
+[data-testid="stTabs"] button[role="tab"]:hover { color: var(--text) !important; background: rgba(255,255,255,0.03) !important; }
+[data-testid="stTabs"] button[role="tab"][aria-selected="true"] { color: #fff !important; border-bottom: 2px solid var(--red) !important; }
+[data-testid="stTabs"] [data-testid="stTabsContent"] { padding-top: 24px !important; }
 
-/* ── Dividers ── */
-hr { border-color: #2a2a2a !important; }
+[data-testid="stDataFrame"] { border: 1px solid var(--border) !important; border-radius: var(--radius) !important; overflow: hidden !important; }
+[data-testid="stDataFrame"] table { font-family: var(--font) !important; }
+[data-testid="stDataFrame"] thead th { background: var(--bg-3) !important; color: var(--text-muted) !important; font-size: 10px !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.8px !important; border-bottom: 1px solid var(--border) !important; padding: 10px 14px !important; }
+[data-testid="stDataFrame"] tbody td { font-size: 13px !important; border-bottom: 1px solid var(--border) !important; padding: 10px 14px !important; color: var(--text) !important; }
+[data-testid="stDataFrame"] tbody tr:hover td { background: var(--bg-3) !important; }
 
-/* ── Sidebar channel pills ── */
-.channel-pill {
-    background: #1a1a1a;
-    border: 1px solid #2a2a2a;
-    border-radius: 8px;
-    padding: 8px 12px;
-    margin-bottom: 6px;
-    font-size: 13px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
+.streamlit-expanderHeader { background: var(--bg-3) !important; border: 1px solid var(--border) !important; border-radius: var(--radius-sm) !important; color: var(--text) !important; font-family: var(--font) !important; font-size: 13px !important; font-weight: 500 !important; padding: 10px 14px !important; }
+.streamlit-expanderContent { background: var(--bg-2) !important; border: 1px solid var(--border) !important; border-top: none !important; border-radius: 0 0 var(--radius-sm) var(--radius-sm) !important; }
 
-/* ── Info box ── */
-.info-box {
-    background: #161b22;
-    border: 1px solid #30363d;
-    border-left: 3px solid #ff0000;
-    border-radius: 8px;
-    padding: 14px 16px;
-    margin-bottom: 12px;
-    font-size: 13px;
-    color: #c9d1d9;
-}
+[data-testid="stProgressBar"] > div > div { background: var(--red) !important; border-radius: 2px !important; }
+[data-testid="stProgressBar"] > div { background: var(--bg-4) !important; border-radius: 2px !important; height: 3px !important; }
 
-/* ── Alert box ── */
-.alert-box {
-    background: #1f1108;
-    border: 1px solid #d4a017;
-    border-left: 3px solid #f5a623;
-    border-radius: 8px;
-    padding: 12px 16px;
-    margin-bottom: 8px;
-    font-size: 13px;
-    color: #e0c87a;
-}
+hr { border-color: var(--border) !important; margin: 16px 0 !important; }
 
-/* ── Success box ── */
-.success-box {
-    background: #0d1f12;
-    border: 1px solid #2ea043;
-    border-left: 3px solid #56d364;
-    border-radius: 8px;
-    padding: 12px 16px;
-    margin-bottom: 8px;
-    font-size: 13px;
-    color: #7ee787;
-}
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 3px; }
 
-/* ── Scrollbar ── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #0f0f0f; }
-::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #555; }
+/* Custom components */
+.brand { display: flex; align-items: center; gap: 10px; padding: 4px 0 20px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.brand-icon { width: 30px; height: 30px; background: var(--red); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 900; color: white; flex-shrink: 0; }
+.brand-text { line-height: 1.2; }
+.brand-name { font-size: 14px; font-weight: 700; color: #fff; }
+.brand-sub { font-size: 10px; color: var(--red); font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; }
 
-/* ── Logo area ── */
-.logo-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 4px;
-}
-.logo-icon {
-    width: 32px;
-    height: 32px;
-    background: #ff0000;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-}
+.page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid var(--border); }
+.page-header-left h1 { font-size: 24px; margin-bottom: 4px !important; }
+.page-header-left p { color: var(--text-muted); font-size: 13px; margin: 0; }
+
+.alert { border-radius: var(--radius-sm); padding: 12px 14px; font-size: 13px; margin-bottom: 8px; display: flex; align-items: flex-start; gap: 10px; }
+.alert-icon { font-size: 15px; flex-shrink: 0; margin-top: 1px; }
+.alert-body { flex: 1; }
+.alert-title { font-weight: 600; margin-bottom: 2px; }
+.alert-desc  { font-size: 12px; opacity: 0.8; }
+.alert-warn   { background: rgba(245,166,35,0.1); border: 1px solid rgba(245,166,35,0.3); color: #e8c46b; }
+.alert-danger { background: rgba(255,0,51,0.08); border: 1px solid rgba(255,0,51,0.25); color: #ff8099; }
+.alert-success{ background: rgba(29,185,84,0.08); border: 1px solid rgba(29,185,84,0.25); color: #5ce68f; }
+.alert-info   { background: rgba(30,143,255,0.08); border: 1px solid rgba(30,143,255,0.25); color: #7ac2ff; }
+
+.video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 4px; }
+.video-card { background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: border-color 0.2s, transform 0.15s; }
+.video-card:hover { border-color: var(--border-2); transform: translateY(-2px); }
+.video-thumb { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; background: var(--bg-4); }
+.video-thumb-ph { width: 100%; aspect-ratio: 16/9; background: var(--bg-4); display: flex; align-items: center; justify-content: center; color: var(--text-dim); font-size: 28px; }
+.video-card-body { padding: 12px 14px; }
+.video-card-title { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.4; margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.video-card-meta { display: flex; gap: 10px; flex-wrap: wrap; }
+.vstat { font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); }
+.vstat span { color: var(--text); font-weight: 600; }
+.video-card-link { display: inline-block; margin-top: 8px; font-size: 11px; color: var(--red); text-decoration: none; font-weight: 600; letter-spacing: 0.3px; }
+.vbadge { display: inline-block; padding: 2px 7px; border-radius: 3px; font-size: 10px; font-weight: 600; margin-bottom: 6px; font-family: var(--font-mono); letter-spacing: 0.5px; }
+.badge-hot  { background: rgba(255,0,51,0.15); color: #ff6680; border: 1px solid rgba(255,0,51,0.3); }
+.badge-new  { background: rgba(30,143,255,0.15); color: #7ac2ff; border: 1px solid rgba(30,143,255,0.3); }
+.badge-ever { background: rgba(29,185,84,0.15); color: #5ce68f; border: 1px solid rgba(29,185,84,0.3); }
+
+.ai-response { background: linear-gradient(135deg, rgba(255,0,51,0.04) 0%, rgba(0,0,0,0) 60%); border: 1px solid rgba(255,0,51,0.2); border-radius: var(--radius); padding: 20px 22px; margin-bottom: 16px; }
+.ai-header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.ai-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.ai-label { font-family: var(--font-mono); font-size: 10px; font-weight: 600; color: var(--red); letter-spacing: 1px; text-transform: uppercase; }
+
+.best-day { background: rgba(29,185,84,0.06); border: 1px solid rgba(29,185,84,0.2); border-radius: var(--radius); padding: 16px 20px; display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+.best-day-icon { font-size: 28px; }
+.best-day-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px; font-family: var(--font-mono); margin-bottom: 2px; }
+.best-day-value { font-size: 22px; font-weight: 700; color: var(--green); }
+.best-day-sub { font-size: 12px; color: var(--text-muted); }
+
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.tag { background: var(--bg-4); border: 1px solid var(--border-2); color: var(--text-muted); padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; font-family: var(--font-mono); }
+.tag-hot { border-color: rgba(255,0,51,0.4); color: #ff8099; background: rgba(255,0,51,0.08); }
+
+.section-label { font-family: var(--font-mono); font-size: 9px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+
+.ch-pill { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 6px; transition: border-color 0.15s; }
+.ch-pill:hover { border-color: var(--border-2); }
+.ch-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+.ch-dot-empty { background: var(--text-dim); }
+.ch-info { flex: 1; min-width: 0; }
+.ch-name { font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-subs { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
+
+.stTextArea textarea { font-family: var(--font-mono) !important; font-size: 12px !important; line-height: 1.7 !important; }
+
+#MainMenu, footer, header { visibility: hidden; }
+.stDeployButton { display: none; }
+[data-testid="stToolbar"] { display: none; }
 </style>
 """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────
-# CONSTANTS & PERSISTENCE
-# ─────────────────────────────────────────────
-DATA_FILE = "channels.json"
-SNAPSHOT_FILE = "snapshots.json"
+# ─────────────────────────────────────────────────────────────
+# PLOTLY THEME
+# ─────────────────────────────────────────────────────────────
+PLOTLY = dict(
+    paper_bgcolor="#0a0a0a",
+    plot_bgcolor="#111111",
+    font=dict(family="Instrument Sans", color="#737373", size=12),
+    xaxis=dict(gridcolor="#1e1e1e", zerolinecolor="#252525", linecolor="#252525"),
+    yaxis=dict(gridcolor="#1e1e1e", zerolinecolor="#252525", linecolor="#252525"),
+    margin=dict(l=16, r=16, t=44, b=16),
+    title_font=dict(size=14, color="#e8e8e8", family="Instrument Sans"),
+    legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor="#252525"),
+)
 
-PLOTLY_DARK = {
-    "paper_bgcolor": "#0f0f0f",
-    "plot_bgcolor": "#151515",
-    "font": {"color": "#e0e0e0", "family": "DM Sans"},
-    "xaxis": {"gridcolor": "#222", "zerolinecolor": "#333"},
-    "yaxis": {"gridcolor": "#222", "zerolinecolor": "#333"},
-    "margin": {"l": 20, "r": 20, "t": 40, "b": 20},
-}
+# ─────────────────────────────────────────────────────────────
+# DATABASE
+# ─────────────────────────────────────────────────────────────
+DB_PATH = "/tmp/chamberlin.db" if os.path.exists("/tmp") else "chamberlin.db"
 
-# ─────────────────────────────────────────────
-# SESSION STATE INIT
-# ─────────────────────────────────────────────
-if "channels" not in st.session_state:
-    st.session_state.channels = {}
-if "notes" not in st.session_state:
-    st.session_state.notes = {}
-if "generated_ideas" not in st.session_state:
-    st.session_state.generated_ideas = {}
-if "snapshots" not in st.session_state:
-    st.session_state.snapshots = {}
-
-
-# ─────────────────────────────────────────────
-# HELPERS
-# ─────────────────────────────────────────────
-def load_data():
-    """Load channels from JSON file into session state."""
-    if not os.path.exists(DATA_FILE):
-        return
+@contextlib.contextmanager
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
     try:
-        with open(DATA_FILE, "r") as f:
-            loaded = json.load(f)
-        for k, v in loaded.items():
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
+
+def init_db():
+    with get_db() as db:
+        db.execute("""CREATE TABLE IF NOT EXISTS channels (
+            name TEXT PRIMARY KEY, channel_id TEXT NOT NULL,
+            channel_stats TEXT DEFAULT '{}', last_refreshed TEXT DEFAULT 'Never',
+            notes TEXT DEFAULT '', ideas TEXT DEFAULT '{}')""")
+        db.execute("""CREATE TABLE IF NOT EXISTS videos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, channel_name TEXT NOT NULL,
+            title TEXT, published TEXT, views INTEGER DEFAULT 0,
+            likes INTEGER DEFAULT 0, comments INTEGER DEFAULT 0,
+            url TEXT, thumbnail TEXT,
+            days_since_publish INTEGER DEFAULT 0, views_per_day REAL DEFAULT 0,
+            like_rate REAL DEFAULT 0, comment_rate REAL DEFAULT 0,
+            FOREIGN KEY (channel_name) REFERENCES channels(name) ON DELETE CASCADE)""")
+        db.execute("""CREATE TABLE IF NOT EXISTS snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, channel_name TEXT NOT NULL,
+            snapshot_date TEXT NOT NULL, subscribers INTEGER DEFAULT 0, total_views INTEGER DEFAULT 0,
+            UNIQUE(channel_name, snapshot_date))""")
+
+def load_channels_from_db() -> dict:
+    channels = {}
+    with get_db() as db:
+        rows = db.execute("SELECT * FROM channels").fetchall()
+        for row in rows:
+            ch = dict(row)
+            stats = json.loads(ch["channel_stats"] or "{}")
+            ideas = json.loads(ch["ideas"] or "{}")
+            vrows = db.execute("SELECT * FROM videos WHERE channel_name=? ORDER BY views DESC",(ch["name"],)).fetchall()
             df = None
-            if v.get("data"):
-                df = pd.read_json(v["data"])
-                if not df.empty and "Published" in df.columns:
-                    df["Published"] = pd.to_datetime(df["Published"], errors="coerce", utc=True)
-                    df["Published"] = df["Published"].dt.tz_localize(None)
-            st.session_state.channels[k] = {
-                "id": v["id"],
-                "data": df,
-                "channel_stats": v.get("channel_stats", {}),
-                "last_refreshed": v.get("last_refreshed", "Never"),
-            }
-            st.session_state.notes[k] = v.get("notes", "")
-            st.session_state.generated_ideas[k] = v.get("ideas", {})
-    except Exception as e:
-        st.sidebar.error(f"Error loading data: {e}")
+            if vrows:
+                df = pd.DataFrame([dict(r) for r in vrows])
+                df["Published"] = pd.to_datetime(df["published"], errors="coerce")
+                df = df.rename(columns={
+                    "title":"Title","views":"Views","likes":"Likes","comments":"Comments",
+                    "url":"URL","thumbnail":"Thumbnail","days_since_publish":"Days Since Publish",
+                    "views_per_day":"Views per Day","like_rate":"Like Rate %","comment_rate":"Comment Rate %"})
+            channels[ch["name"]] = {
+                "id": ch["channel_id"], "data": df, "channel_stats": stats,
+                "last_refreshed": ch["last_refreshed"], "notes": ch["notes"] or "", "ideas": ideas}
+    return channels
 
+def save_channel_to_db(name, channel_id, stats, df, last_refreshed, notes="", ideas=None):
+    with get_db() as db:
+        db.execute("""INSERT INTO channels (name,channel_id,channel_stats,last_refreshed,notes,ideas)
+            VALUES (?,?,?,?,?,?) ON CONFLICT(name) DO UPDATE SET
+            channel_id=excluded.channel_id, channel_stats=excluded.channel_stats,
+            last_refreshed=excluded.last_refreshed, notes=excluded.notes, ideas=excluded.ideas""",
+            (name, channel_id, json.dumps(stats), last_refreshed, notes, json.dumps(ideas or {})))
+        if df is not None and not df.empty:
+            db.execute("DELETE FROM videos WHERE channel_name=?", (name,))
+            for _, row in df.iterrows():
+                pub = row["Published"].strftime("%Y-%m-%d") if pd.notna(row["Published"]) else ""
+                db.execute("""INSERT INTO videos
+                    (channel_name,title,published,views,likes,comments,url,thumbnail,
+                     days_since_publish,views_per_day,like_rate,comment_rate)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    (name, row.get("Title",""), pub,
+                     int(row.get("Views",0)), int(row.get("Likes",0)), int(row.get("Comments",0)),
+                     row.get("URL",""), row.get("Thumbnail",""),
+                     int(row.get("Days Since Publish",0)), float(row.get("Views per Day",0)),
+                     float(row.get("Like Rate %",0)), float(row.get("Comment Rate %",0))))
 
-def save_data():
-    """Persist session state to JSON file."""
-    save_payload = {}
-    for k, v in st.session_state.channels.items():
-        df_json = v["data"].to_json() if v.get("data") is not None else None
-        save_payload[k] = {
-            "id": v["id"],
-            "data": df_json,
-            "channel_stats": v.get("channel_stats", {}),
-            "last_refreshed": v.get("last_refreshed", "Never"),
-            "notes": st.session_state.notes.get(k, ""),
-            "ideas": st.session_state.generated_ideas.get(k, {}),
-        }
-    with open(DATA_FILE, "w") as f:
-        json.dump(save_payload, f)
+def delete_channel_from_db(name):
+    with get_db() as db:
+        db.execute("DELETE FROM channels WHERE name=?", (name,))
+        db.execute("DELETE FROM videos WHERE channel_name=?", (name,))
 
-
-def load_snapshots():
-    if not os.path.exists(SNAPSHOT_FILE):
-        return
-    try:
-        with open(SNAPSHOT_FILE, "r") as f:
-            st.session_state.snapshots = json.load(f)
-    except Exception:
-        pass
-
-
-def save_snapshot(channel_name, stats):
-    """Save a timestamped snapshot of channel stats for growth tracking."""
+def save_snapshot_to_db(channel_name, subscribers, total_views):
     today = datetime.now().strftime("%Y-%m-%d")
-    if channel_name not in st.session_state.snapshots:
-        st.session_state.snapshots[channel_name] = {}
-    st.session_state.snapshots[channel_name][today] = stats
-    with open(SNAPSHOT_FILE, "w") as f:
-        json.dump(st.session_state.snapshots, f)
+    with get_db() as db:
+        db.execute("""INSERT INTO snapshots (channel_name,snapshot_date,subscribers,total_views)
+            VALUES (?,?,?,?) ON CONFLICT(channel_name,snapshot_date) DO UPDATE SET
+            subscribers=excluded.subscribers, total_views=excluded.total_views""",
+            (channel_name, today, subscribers, total_views))
 
+def load_snapshots_from_db(channel_name) -> pd.DataFrame:
+    with get_db() as db:
+        rows = db.execute(
+            "SELECT snapshot_date,subscribers,total_views FROM snapshots WHERE channel_name=? ORDER BY snapshot_date",
+            (channel_name,)).fetchall()
+    return pd.DataFrame([dict(r) for r in rows]) if rows else pd.DataFrame()
 
+# ─────────────────────────────────────────────────────────────
+# SECRETS
+# ─────────────────────────────────────────────────────────────
+def get_secret(key, fallback=""):
+    try:
+        return st.secrets.get(key, fallback)
+    except Exception:
+        return os.environ.get(key, fallback)
+
+# ─────────────────────────────────────────────────────────────
+# YOUTUBE API
+# ─────────────────────────────────────────────────────────────
+@st.cache_data(ttl=1800, show_spinner=False)
 def fetch_channel_data(api_key: str, channel_id: str):
-    """Fetch channel info + recent videos from YouTube Data API."""
     youtube = build("youtube", "v3", developerKey=api_key)
-
-    # Channel stats
-    ch_resp = youtube.channels().list(
-        part="snippet,statistics,contentDetails",
-        id=channel_id,
-    ).execute()
+    ch_resp = youtube.channels().list(part="snippet,statistics,contentDetails", id=channel_id).execute()
     if not ch_resp.get("items"):
-        raise ValueError(f"Channel ID '{channel_id}' not found.")
+        raise ValueError(f"Channel ID not found: {channel_id}")
     ch = ch_resp["items"][0]
-    subs = int(ch["statistics"].get("subscriberCount", 0))
-    total_views = int(ch["statistics"].get("viewCount", 0))
-    video_count = int(ch["statistics"].get("videoCount", 0))
+    stats = {
+        "subscribers":   int(ch["statistics"].get("subscriberCount", 0)),
+        "total_views":   int(ch["statistics"].get("viewCount", 0)),
+        "video_count":   int(ch["statistics"].get("videoCount", 0)),
+        "channel_name":  ch["snippet"]["title"],
+        "channel_thumb": ch["snippet"]["thumbnails"].get("medium", {}).get("url", ""),
+        "description":   ch["snippet"].get("description", "")[:300],
+    }
     uploads_id = ch["contentDetails"]["relatedPlaylists"]["uploads"]
-    channel_name = ch["snippet"]["title"]
-    channel_thumb = ch["snippet"]["thumbnails"].get("default", {}).get("url", "")
 
-    # Video list (up to 100)
-    videos = []
-    next_page = None
+    videos, next_page = [], None
     for _ in range(2):
         pl = youtube.playlistItems().list(
-            part="contentDetails",
-            playlistId=uploads_id,
-            maxResults=50,
-            pageToken=next_page,
-        ).execute()
-        video_ids = [item["contentDetails"]["videoId"] for item in pl["items"]]
-        vid_resp = youtube.videos().list(
-            part="snippet,statistics",
-            id=",".join(video_ids),
-        ).execute()
-        for item in vid_resp["items"]:
-            s = item["statistics"]
-            sn = item["snippet"]
+            part="contentDetails", playlistId=uploads_id,
+            maxResults=50, pageToken=next_page).execute()
+        video_ids = [i["contentDetails"]["videoId"] for i in pl["items"]]
+        vr = youtube.videos().list(part="snippet,statistics", id=",".join(video_ids)).execute()
+        for item in vr["items"]:
+            s = item["statistics"]; sn = item["snippet"]
+            thumbs = sn.get("thumbnails", {})
+            thumb_url = (thumbs.get("maxres") or thumbs.get("high") or thumbs.get("medium") or thumbs.get("default") or {}).get("url", "")
             videos.append({
-                "Title": sn["title"],
+                "Title":     sn["title"],
                 "Published": sn["publishedAt"][:10],
-                "Views": int(s.get("viewCount", 0)),
-                "Likes": int(s.get("likeCount", 0)),
-                "Comments": int(s.get("commentCount", 0)),
-                "URL": f"https://youtu.be/{item['id']}",
+                "Views":     int(s.get("viewCount", 0)),
+                "Likes":     int(s.get("likeCount", 0)),
+                "Comments":  int(s.get("commentCount", 0)),
+                "URL":       f"https://youtu.be/{item['id']}",
+                "Thumbnail": thumb_url,
             })
         next_page = pl.get("nextPageToken")
-        if not next_page:
-            break
+        if not next_page: break
 
     df = pd.DataFrame(videos)
     if not df.empty:
         df["Published"] = pd.to_datetime(df["Published"])
-        df = df.sort_values("Published", ascending=False)
-        df["Days Since Publish"] = (datetime.now() - df["Published"]).dt.days
-        df["Views per Day"] = (df["Views"] / df["Days Since Publish"].replace(0, 1)).round(1)
-        df["Like Rate %"] = (df["Likes"] / df["Views"].replace(0, 1) * 100).round(2)
-        df["Comment Rate %"] = (df["Comments"] / df["Views"].replace(0, 1) * 100).round(2)
+        df = df.sort_values("Published", ascending=False).reset_index(drop=True)
+        df["Days Since Publish"] = (datetime.now() - df["Published"]).dt.days.clip(lower=1)
+        df["Views per Day"]  = (df["Views"] / df["Days Since Publish"]).round(1)
+        df["Like Rate %"]    = (df["Likes"]    / df["Views"].replace(0,1) * 100).round(2)
+        df["Comment Rate %"] = (df["Comments"] / df["Views"].replace(0,1) * 100).round(2)
+    return df, stats
 
-    channel_stats = {
-        "subscribers": subs,
-        "total_views": total_views,
-        "video_count": video_count,
-        "channel_name": channel_name,
-        "channel_thumb": channel_thumb,
-    }
-    return df, channel_stats
+# ─────────────────────────────────────────────────────────────
+# CLAUDE AI
+# ─────────────────────────────────────────────────────────────
+def generate_ai_ideas(anthropic_key: str, channel_name: str, df: pd.DataFrame, channel_desc: str = "") -> str:
+    client = anthropic.Anthropic(api_key=anthropic_key)
+    top_titles    = df.nlargest(15, "Views")["Title"].tolist()
+    recent_titles = df.nlargest(10, "Views per Day")["Title"].tolist()
+    avg_views = int(df["Views"].mean())
+    day_col = df.copy(); day_col["Day"] = day_col["Published"].dt.day_name()
+    best_day = day_col.groupby("Day")["Views"].mean().idxmax() if len(day_col) > 6 else "unknown"
 
+    prompt = f"""You are a YouTube growth strategist analyzing a channel called "{channel_name}".
 
-def generate_ideas(channel_name: str, df: pd.DataFrame) -> dict:
-    """Analyze titles and generate content ideas (local heuristic, no API needed)."""
-    all_titles = " | ".join(df["Title"].tolist())
-    niche = (channel_name + " " + all_titles).lower()
-    words = re.findall(r"\b[a-z]{4,}\b", niche)
-    stop = {"this", "that", "with", "from", "have", "what", "your", "they", "their",
-             "will", "more", "just", "been", "like", "also", "when", "then", "than",
-             "about", "which", "there", "after", "video", "youtube", "channel"}
-    filtered = [w for w in words if w not in stop]
-    common = Counter(filtered).most_common(10)
-    top = [w[0] for w in common][:6]
+Channel overview:
+- Average views per video: {avg_views:,}
+- Best performing upload day: {best_day}
+- Channel description: {channel_desc or "Not provided"}
 
-    if len(top) < 6:
-        top += ["content", "growth", "strategy", "viral", "trending", "tips"][len(top):]
+Top 15 videos by views:
+{chr(10).join(f"• {t}" for t in top_titles)}
 
-    # Best performing titles for inspiration
-    top_vids = df.nlargest(5, "Views")["Title"].tolist()
+Top 10 videos by momentum (views/day):
+{chr(10).join(f"• {t}" for t in recent_titles)}
 
-    ideas = [
-        f"The Ultimate Guide to {top[0].title()} (Based on What's Already Working)",
-        f"Why Your {top[1].title()} Strategy Is Failing — And How to Fix It",
-        f"{top[2].title()} vs {top[3].title()}: What Performs Better?",
-        f"How I Grew Our {top[0].title()} Audience by 10x",
-        f"The {top[4].title()} Playbook Nobody Is Talking About",
-        f"Stop Making These {top[5].title()} Mistakes (Deep Dive)",
-    ]
+Based on this data, provide:
 
-    return {
-        "topics": top,
-        "ideas": ideas,
-        "inspiration": top_vids,
-    }
+1. **Niche & Audience Analysis** (2-3 sentences on what's working and why)
 
+2. **6 High-Potential Video Ideas** — each with:
+   - A compelling, specific title
+   - Why it will perform based on the patterns you see
+   - Best format (long-form, short, series episode, etc.)
 
-def get_best_upload_day(df: pd.DataFrame):
-    """Return best day to upload based on avg views."""
-    temp = df.copy()
-    temp["Day"] = temp["Published"].dt.day_name()
-    day_order = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-    avg = temp.groupby("Day")["Views"].mean().reindex(day_order).dropna()
-    return avg
+3. **One Series Concept** — a multi-part series that could drive sustained subscriber growth
 
+4. **One Contrarian Opportunity** — something this channel is NOT doing that could outperform current content
+
+Be specific, strategic, and data-driven. Reference actual patterns from the titles."""
+
+    msg = client.messages.create(
+        model="claude-sonnet-4-20250514", max_tokens=1400,
+        messages=[{"role": "user", "content": prompt}])
+    return msg.content[0].text
+
+# ─────────────────────────────────────────────────────────────
+# UTILITIES
+# ─────────────────────────────────────────────────────────────
+def fmt(n) -> str:
+    n = int(n)
+    if n >= 1_000_000: return f"{n/1_000_000:.1f}M"
+    if n >= 1_000:     return f"{n/1_000:.1f}K"
+    return f"{n:,}"
 
 def detect_alerts(channels: dict) -> list:
-    """Detect performance anomalies across channels."""
     alerts = []
+    cutoff = datetime.now() - timedelta(days=30)
+    prior  = datetime.now() - timedelta(days=60)
     for name, info in channels.items():
         df = info.get("data")
-        if df is None or df.empty:
-            continue
-        # Last 30 days vs prior 30 days
-        cutoff = datetime.now() - timedelta(days=30)
-        prior = datetime.now() - timedelta(days=60)
+        if df is None or df.empty or "Published" not in df.columns: continue
         recent = df[df["Published"] >= cutoff]["Views"]
-        older = df[(df["Published"] >= prior) & (df["Published"] < cutoff)]["Views"]
-        if len(recent) >= 2 and len(older) >= 2:
-            r_avg = recent.mean()
-            o_avg = older.mean()
-            if o_avg > 0:
-                pct = (r_avg - o_avg) / o_avg * 100
-                if pct <= -30:
-                    alerts.append({"channel": name, "type": "drop", "pct": pct})
-                elif pct >= 50:
-                    alerts.append({"channel": name, "type": "spike", "pct": pct})
+        older  = df[(df["Published"] >= prior) & (df["Published"] < cutoff)]["Views"]
+        if len(recent) >= 2 and len(older) >= 2 and older.mean() > 0:
+            pct = (recent.mean() - older.mean()) / older.mean() * 100
+            if pct <= -30: alerts.append({"channel": name, "type": "drop", "pct": pct})
+            elif pct >= 40: alerts.append({"channel": name, "type": "spike", "pct": pct})
+        if len(df) >= 5:
+            old_vids = df[df["Days Since Publish"] >= 90]
+            if not old_vids.empty:
+                ev = old_vids[old_vids["Views per Day"] > df["Views per Day"].median() * 1.5]
+                if not ev.empty:
+                    alerts.append({"channel": name, "type": "evergreen",
+                                   "title": ev.iloc[0]["Title"], "vpd": ev.iloc[0]["Views per Day"]})
     return alerts
 
+def get_badge(row) -> str:
+    if row["Days Since Publish"] <= 14: return '<span class="vbadge badge-new">NEW</span>'
+    if row["Views per Day"] >= 500:     return '<span class="vbadge badge-hot">HOT</span>'
+    if row["Days Since Publish"] >= 90 and row["Views per Day"] >= 100:
+        return '<span class="vbadge badge-ever">EVERGREEN</span>'
+    return ""
 
-def fmt_number(n):
-    if n >= 1_000_000:
-        return f"{n/1_000_000:.1f}M"
-    if n >= 1_000:
-        return f"{n/1_000:.1f}K"
-    return str(n)
+def render_video_grid(df: pd.DataFrame, max_cards: int = 12):
+    subset = df.head(max_cards)
+    cards = '<div class="video-grid">'
+    for _, row in subset.iterrows():
+        badge = get_badge(row)
+        thumb = (f'<img class="video-thumb" src="{row["Thumbnail"]}" alt="" loading="lazy">'
+                 if row.get("Thumbnail") else '<div class="video-thumb-ph">▶</div>')
+        title = str(row["Title"]).replace('"','&quot;')[:80]
+        ch    = f'<div class="vstat" style="color:var(--red);font-weight:600">{row.get("Channel","")}</div>' if row.get("Channel") else ""
+        cards += f"""<div class="video-card">
+            <a href="{row['URL']}" target="_blank" style="text-decoration:none">{thumb}</a>
+            <div class="video-card-body">
+                {ch}{badge}
+                <div class="video-card-title">{title}</div>
+                <div class="video-card-meta">
+                    <div class="vstat"><span>{fmt(row['Views'])}</span> views</div>
+                    <div class="vstat"><span>{row['Views per Day']:.0f}</span>/day</div>
+                    <div class="vstat"><span>{row['Like Rate %']:.1f}%</span> liked</div>
+                </div>
+                <a href="{row['URL']}" target="_blank" class="video-card-link">Watch ↗</a>
+            </div></div>"""
+    cards += '</div>'
+    st.markdown(cards, unsafe_allow_html=True)
 
+# ─────────────────────────────────────────────────────────────
+# INIT
+# ─────────────────────────────────────────────────────────────
+init_db()
 
-# ─────────────────────────────────────────────
-# LOAD ON FIRST RUN
-# ─────────────────────────────────────────────
-if not st.session_state.channels:
-    load_data()
-    load_snapshots()
+if "channels" not in st.session_state:
+    st.session_state.channels = load_channels_from_db()
+if "api_key" not in st.session_state:
+    st.session_state.api_key = get_secret("YOUTUBE_API_KEY")
+if "anthropic_key" not in st.session_state:
+    st.session_state.anthropic_key = get_secret("ANTHROPIC_API_KEY")
+if "ideas_cache" not in st.session_state:
+    st.session_state.ideas_cache = {}
 
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 # SIDEBAR
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("""
-    <div class="logo-row">
-        <div class="logo-icon">▶</div>
-        <div style="font-size:16px;font-weight:700;color:#fff;letter-spacing:-0.3px;">Chamberlin<br><span style="color:#ff0000;font-size:12px;font-weight:500;letter-spacing:1px;">MEDIA MONITOR</span></div>
-    </div>
-    """, unsafe_allow_html=True)
-    st.divider()
+    st.markdown("""<div class="brand">
+        <div class="brand-icon">▶</div>
+        <div class="brand-text">
+            <div class="brand-name">Chamberlin</div>
+            <div class="brand-sub">Media Monitor</div>
+        </div></div>""", unsafe_allow_html=True)
 
-    API_KEY = st.text_input("YouTube Data API Key", type="password", placeholder="AIza...")
-    st.divider()
+    with st.expander("🔑  API Keys", expanded=not st.session_state.api_key):
+        yt_key  = st.text_input("YouTube Data API Key",  value=st.session_state.api_key,  type="password", placeholder="AIza...")
+        ant_key = st.text_input("Anthropic API Key",     value=st.session_state.anthropic_key, type="password", placeholder="sk-ant-...")
+        if st.button("Save Keys", use_container_width=True):
+            st.session_state.api_key      = yt_key
+            st.session_state.anthropic_key = ant_key
+            st.success("Saved.")
 
-    # Add channel
+    st.markdown('<div class="section-label" style="margin-top:16px">Channels</div>', unsafe_allow_html=True)
+
     with st.expander("➕  Add Channel"):
-        nickname = st.text_input("Nickname", placeholder="My Channel")
-        ch_id_input = st.text_input("Channel ID", placeholder="UCxxxxxxxxxxxxxxxxxxxx")
-        if st.button("Add Channel"):
-            if not API_KEY:
-                st.error("Enter API key first.")
-            elif not nickname or not ch_id_input:
-                st.error("Fill in both fields.")
-            elif nickname in st.session_state.channels:
-                st.error("Channel already exists.")
+        new_nick = st.text_input("Nickname", placeholder="Brand Name")
+        new_id   = st.text_input("Channel ID", placeholder="UCxxxxxxxxxxxxxxxxxxxx")
+        if st.button("Add Channel", type="primary", use_container_width=True):
+            if not st.session_state.api_key:
+                st.error("Enter YouTube API key first.")
+            elif not new_nick or not new_id:
+                st.error("Fill both fields.")
+            elif new_nick in st.session_state.channels:
+                st.error("Already added.")
             else:
-                st.session_state.channels[nickname] = {
-                    "id": ch_id_input.strip(),
-                    "data": None,
-                    "channel_stats": {},
-                    "last_refreshed": "Never",
-                }
-                st.session_state.notes[nickname] = ""
-                st.session_state.generated_ideas[nickname] = {}
-                save_data()
-                st.success(f"Added: {nickname}")
+                st.session_state.channels[new_nick] = {
+                    "id": new_id.strip(), "data": None, "channel_stats": {},
+                    "last_refreshed": "Never", "notes": "", "ideas": {}}
+                save_channel_to_db(new_nick, new_id.strip(), {}, None, "Never")
+                st.success(f"Added {new_nick}")
                 st.rerun()
 
-    # Channel list
     if st.session_state.channels:
-        st.markdown("**Channels**")
         for ch_name in list(st.session_state.channels.keys()):
-            col_a, col_b = st.columns([5, 1])
-            stats = st.session_state.channels[ch_name].get("channel_stats", {})
-            subs_str = fmt_number(stats.get("subscribers", 0)) if stats.get("subscribers") else "—"
-            col_a.markdown(f"**{ch_name}**  \n<small style='color:#888'>{subs_str} subs</small>", unsafe_allow_html=True)
-            if col_b.button("✕", key=f"rm_{ch_name}", help=f"Remove {ch_name}"):
+            info  = st.session_state.channels[ch_name]
+            stats = info.get("channel_stats", {})
+            subs_str = fmt(stats.get("subscribers",0)) if stats.get("subscribers") else "—"
+            has_data = info.get("data") is not None
+            dot_cls  = "ch-dot" if has_data else "ch-dot ch-dot-empty"
+            c1, c2 = st.columns([5,1])
+            c1.markdown(f"""<div class="ch-pill">
+                <div class="{dot_cls}"></div>
+                <div class="ch-info">
+                    <div class="ch-name">{ch_name}</div>
+                    <div class="ch-subs">{subs_str} subs</div>
+                </div></div>""", unsafe_allow_html=True)
+            if c2.button("✕", key=f"del_{ch_name}"):
+                delete_channel_from_db(ch_name)
                 del st.session_state.channels[ch_name]
-                st.session_state.notes.pop(ch_name, None)
-                st.session_state.generated_ideas.pop(ch_name, None)
-                save_data()
                 st.rerun()
+
         st.divider()
+        if st.session_state.api_key:
+            if st.button("↺  Refresh All Channels", type="primary", use_container_width=True):
+                errors = []
+                prog = st.progress(0, text="Refreshing...")
+                total = len(st.session_state.channels)
+                fetch_channel_data.clear()
+                for i, (ch_name, info) in enumerate(st.session_state.channels.items()):
+                    try:
+                        df, stats = fetch_channel_data(st.session_state.api_key, info["id"])
+                        ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+                        st.session_state.channels[ch_name].update({"data":df,"channel_stats":stats,"last_refreshed":ts})
+                        save_channel_to_db(ch_name, info["id"], stats, df, ts, info.get("notes",""), info.get("ideas",{}))
+                        save_snapshot_to_db(ch_name, stats["subscribers"], stats["total_views"])
+                        prog.progress((i+1)/total, text=f"Done: {ch_name}")
+                    except Exception as e:
+                        errors.append(f"{ch_name}: {e}")
+                prog.empty()
+                for err in errors: st.error(err)
+                if not errors: st.success("All refreshed!")
+                st.rerun()
 
-    # Bulk refresh
-    if st.session_state.channels and API_KEY:
-        if st.button("🔄  Refresh All Channels", use_container_width=True):
-            errors = []
-            prog = st.progress(0)
-            total = len(st.session_state.channels)
-            for i, (ch_name, info) in enumerate(st.session_state.channels.items()):
-                try:
-                    df, stats = fetch_channel_data(API_KEY, info["id"])
-                    st.session_state.channels[ch_name]["data"] = df
-                    st.session_state.channels[ch_name]["channel_stats"] = stats
-                    st.session_state.channels[ch_name]["last_refreshed"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                    save_snapshot(ch_name, {"subscribers": stats["subscribers"], "total_views": stats["total_views"]})
-                except Exception as e:
-                    errors.append(f"{ch_name}: {e}")
-                prog.progress((i + 1) / total)
-            save_data()
-            if errors:
-                for err in errors:
-                    st.error(err)
-            else:
-                st.success("All channels refreshed!")
-            time.sleep(0.5)
-            st.rerun()
-
-# ─────────────────────────────────────────────
-# MAIN CONTENT
-# ─────────────────────────────────────────────
-if not API_KEY:
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown('<div class="info-box">🔑  Enter your <strong>YouTube Data API Key</strong> in the sidebar to get started.</div>', unsafe_allow_html=True)
+# ─────────────────────────────────────────────────────────────
+# GUARD
+# ─────────────────────────────────────────────────────────────
+if not st.session_state.api_key:
+    st.markdown("""<div style="max-width:480px;margin:80px auto;text-align:center">
+        <div style="font-size:48px;margin-bottom:16px">▶</div>
+        <h2 style="font-size:22px;font-weight:700;color:#fff;margin-bottom:8px">Chamberlin Media Monitor</h2>
+        <p style="color:#737373">Enter your YouTube Data API key in the sidebar to get started.</p>
+    </div>""", unsafe_allow_html=True)
     st.stop()
 
 if not st.session_state.channels:
-    st.markdown('<div class="info-box">📡  Add your first YouTube channel using the sidebar.</div>', unsafe_allow_html=True)
+    st.markdown("""<div style="max-width:480px;margin:80px auto;text-align:center">
+        <div style="font-size:48px;margin-bottom:16px">📡</div>
+        <h2 style="font-size:20px;font-weight:600;color:#fff;margin-bottom:8px">No channels yet</h2>
+        <p style="color:#737373">Add your first YouTube channel using the sidebar.</p>
+    </div>""", unsafe_allow_html=True)
     st.stop()
 
-# ─────────────────────────────────────────────
-# NAVIGATION TABS
-# ─────────────────────────────────────────────
-TAB_HOME, TAB_OVERVIEW, TAB_DETAIL, TAB_GROWTH = st.tabs([
-    "🏠  Dashboard",
-    "📊  All Channels",
-    "🔍  Channel Detail",
-    "📈  Growth Trends",
-])
+# ─────────────────────────────────────────────────────────────
+# MAIN TABS
+# ─────────────────────────────────────────────────────────────
+T_DASH, T_ALL, T_DETAIL, T_GROWTH = st.tabs(["  Dashboard  ","  All Channels  ","  Channel Detail  ","  Growth Trends  "])
 
-# ══════════════════════════════════════════════
-# TAB 1 — DASHBOARD HOME
-# ══════════════════════════════════════════════
-with TAB_HOME:
-    st.markdown("## Team Dashboard")
-    st.caption("Quick wins, alerts, and performance at a glance.")
+# ═══════════════════════════════════════════
+# DASHBOARD
+# ═══════════════════════════════════════════
+with T_DASH:
+    st.markdown("""<div class="page-header">
+        <div class="page-header-left">
+            <h1>Dashboard</h1>
+            <p>Performance overview across all channels</p>
+        </div></div>""", unsafe_allow_html=True)
+
+    total_subs  = sum(v.get("channel_stats",{}).get("subscribers",0) for v in st.session_state.channels.values())
+    total_views = sum(v.get("channel_stats",{}).get("total_views",0)  for v in st.session_state.channels.values())
+    loaded      = sum(1 for v in st.session_state.channels.values() if v.get("data") is not None)
+
+    k1,k2,k3,k4 = st.columns(4)
+    k1.metric("Total Subscribers",   fmt(total_subs))
+    k2.metric("Combined Views",       fmt(total_views))
+    k3.metric("Channels Tracked",     len(st.session_state.channels))
+    k4.metric("Channels with Data",   loaded)
+
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Alerts
     alerts = detect_alerts(st.session_state.channels)
     if alerts:
-        st.markdown("### 🚨 Performance Alerts")
+        st.markdown('<div class="section-label">Alerts</div>', unsafe_allow_html=True)
         for a in alerts:
             if a["type"] == "drop":
-                st.markdown(f'<div class="alert-box">📉 <strong>{a["channel"]}</strong> — avg views dropped <strong>{abs(a["pct"]):.0f}%</strong> vs last 30 days</div>', unsafe_allow_html=True)
-            else:
-                st.markdown(f'<div class="success-box">📈 <strong>{a["channel"]}</strong> — avg views up <strong>{a["pct"]:.0f}%</strong> vs last 30 days</div>', unsafe_allow_html=True)
+                st.markdown(f"""<div class="alert alert-danger"><div class="alert-icon">📉</div>
+                    <div class="alert-body"><div class="alert-title">{a['channel']} — View drop detected</div>
+                    <div class="alert-desc">Avg views down {abs(a['pct']):.0f}% vs prior 30 days. Review upload cadence or title strategy.</div></div></div>""", unsafe_allow_html=True)
+            elif a["type"] == "spike":
+                st.markdown(f"""<div class="alert alert-success"><div class="alert-icon">📈</div>
+                    <div class="alert-body"><div class="alert-title">{a['channel']} — Momentum spike</div>
+                    <div class="alert-desc">Avg views up {a['pct']:.0f}% vs prior 30 days. Double down on what's working.</div></div></div>""", unsafe_allow_html=True)
+            elif a["type"] == "evergreen":
+                st.markdown(f"""<div class="alert alert-info"><div class="alert-icon">🌿</div>
+                    <div class="alert-body"><div class="alert-title">{a['channel']} — Evergreen asset identified</div>
+                    <div class="alert-desc">"{a['title'][:65]}..." still pulling {a['vpd']:.0f} views/day. Consider promoting it or building a series around it.</div></div></div>""", unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
 
-    # Top-level KPIs across all channels
-    total_subs = sum(v.get("channel_stats", {}).get("subscribers", 0) for v in st.session_state.channels.values())
-    total_views_all = sum(v.get("channel_stats", {}).get("total_views", 0) for v in st.session_state.channels.values())
-    total_channels = len(st.session_state.channels)
-    loaded_channels = sum(1 for v in st.session_state.channels.values() if v.get("data") is not None)
-
-    kc1, kc2, kc3, kc4 = st.columns(4)
-    kc1.metric("Total Subscribers", fmt_number(total_subs))
-    kc2.metric("Total Channel Views", fmt_number(total_views_all))
-    kc3.metric("Channels Tracked", total_channels)
-    kc4.metric("Channels with Data", loaded_channels)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.divider()
-
-    # Top performers across all channels
-    all_video_rows = []
+    all_rows = []
     for ch_name, info in st.session_state.channels.items():
         df = info.get("data")
         if df is not None and not df.empty:
-            top5 = df.nlargest(5, "Views per Day").copy()
-            top5["Channel"] = ch_name
-            all_video_rows.append(top5)
+            top = df.nlargest(8,"Views per Day").copy()
+            top["Channel"] = ch_name
+            all_rows.append(top)
 
-    if all_video_rows:
-        combined = pd.concat(all_video_rows, ignore_index=True)
-        combined = combined.nlargest(10, "Views per Day")
+    if all_rows:
+        combined = pd.concat(all_rows).nlargest(12,"Views per Day")
+        st.markdown('<div class="section-label">Top Videos Right Now — By Momentum</div>', unsafe_allow_html=True)
+        render_video_grid(combined, max_cards=12)
 
-        st.markdown("### 🏆 Top Performing Videos Right Now")
-        st.caption("Ranked by Views per Day — best indicators of momentum.")
-        disp = combined[["Channel", "Title", "Views per Day", "Views", "Like Rate %", "Published"]].copy()
-        disp["Published"] = disp["Published"].dt.strftime("%Y-%m-%d")
-        st.dataframe(disp, use_container_width=True, hide_index=True)
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # Quick wins: high comment rate, low view count (underexposed)
-        st.markdown("### 💡 Quick Wins — High Engagement, Low Reach")
-        st.caption("Videos with high comment rates but lower views — worth promoting.")
-        qw = combined.nlargest(5, "Comment Rate %").nsmallest(3, "Views")
-        if not qw.empty:
-            for _, row in qw.iterrows():
-                st.markdown(f'<div class="info-box">📌 <strong>{row["Channel"]}</strong> — {row["Title"][:80]} &nbsp;|&nbsp; {row["Comment Rate %"]:.2f}% comment rate, {fmt_number(int(row["Views"]))} views</div>', unsafe_allow_html=True)
-
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        all_full = pd.concat(all_rows)
+        st.markdown('<div class="section-label">Quick Wins — High Engagement, Low Reach</div>', unsafe_allow_html=True)
+        qw = all_full[all_full["Comment Rate %"] > all_full["Comment Rate %"].quantile(0.7)].nsmallest(4,"Views")
+        for _, row in qw.iterrows():
+            ch = row.get("Channel","")
+            st.markdown(f"""<div class="alert alert-warn"><div class="alert-icon">💡</div>
+                <div class="alert-body"><div class="alert-title">{ch} — {str(row['Title'])[:70]}</div>
+                <div class="alert-desc">{row['Comment Rate %']:.2f}% comment rate with only {fmt(row['Views'])} views — high resonance, low distribution.</div></div></div>""", unsafe_allow_html=True)
     else:
-        st.info("Refresh channel data to see the dashboard.")
+        st.markdown('<div class="alert alert-info"><div class="alert-icon">ℹ️</div><div class="alert-body"><div class="alert-title">No data loaded</div><div class="alert-desc">Refresh your channels to populate the dashboard.</div></div></div>', unsafe_allow_html=True)
 
-# ══════════════════════════════════════════════
-# TAB 2 — ALL CHANNELS OVERVIEW
-# ══════════════════════════════════════════════
-with TAB_OVERVIEW:
-    st.markdown("## All Channels Overview")
-    st.markdown("<br>", unsafe_allow_html=True)
+# ═══════════════════════════════════════════
+# ALL CHANNELS
+# ═══════════════════════════════════════════
+with T_ALL:
+    st.markdown("""<div class="page-header">
+        <div class="page-header-left"><h1>All Channels</h1><p>Portfolio overview and comparison</p></div></div>""", unsafe_allow_html=True)
 
-    summary_rows = []
+    rows = []
     for ch_name, info in st.session_state.channels.items():
-        df = info.get("data")
-        stats = info.get("channel_stats", {})
-        avg_vpd = round(df["Views per Day"].mean(), 1) if df is not None and not df.empty else 0
-        avg_views = int(df["Views"].mean()) if df is not None and not df.empty else 0
-        summary_rows.append({
-            "Channel": ch_name,
-            "Subscribers": stats.get("subscribers", 0),
-            "Total Views": stats.get("total_views", 0),
+        df = info.get("data"); s = info.get("channel_stats",{})
+        rows.append({
+            "Channel":         ch_name,
+            "Subscribers":     s.get("subscribers",0),
+            "Total Views":     s.get("total_views",0),
             "Videos Analyzed": len(df) if df is not None else 0,
-            "Avg Views / Video": avg_views,
-            "Avg Views / Day": avg_vpd,
-            "Last Refreshed": info.get("last_refreshed", "Never"),
+            "Avg Views":       int(df["Views"].mean()) if df is not None and not df.empty else 0,
+            "Avg Views/Day":   round(df["Views per Day"].mean(),1) if df is not None and not df.empty else 0,
+            "Last Refreshed":  info.get("last_refreshed","Never"),
         })
 
-    if summary_rows:
-        summary_df = pd.DataFrame(summary_rows).sort_values("Total Views", ascending=False)
+    if rows:
+        summary_df = pd.DataFrame(rows).sort_values("Total Views", ascending=False)
+        disp = summary_df.copy()
+        disp["Subscribers"] = disp["Subscribers"].apply(fmt)
+        disp["Total Views"] = disp["Total Views"].apply(fmt)
+        disp["Avg Views"]   = disp["Avg Views"].apply(fmt)
+        st.dataframe(disp, use_container_width=True, hide_index=True)
+        st.download_button("⬇  Export CSV", summary_df.to_csv(index=False).encode(), "chamberlin_channels.csv", "text/csv")
 
-        # Display with formatted numbers
-        display_summary = summary_df.copy()
-        display_summary["Subscribers"] = display_summary["Subscribers"].apply(fmt_number)
-        display_summary["Total Views"] = display_summary["Total Views"].apply(fmt_number)
-        display_summary["Avg Views / Video"] = display_summary["Avg Views / Video"].apply(fmt_number)
-        st.dataframe(display_summary, use_container_width=True, hide_index=True)
-
-        csv_bytes = summary_df.to_csv(index=False).encode()
-        st.download_button("⬇ Export All Channels CSV", csv_bytes, "chamberlin_all_channels.csv", "text/csv")
-
-        # Comparison bar chart
-        if len(summary_rows) > 1:
+        if len(rows) > 1:
             st.markdown("<br>", unsafe_allow_html=True)
-            st.markdown("### Channel Comparison")
-            fig = px.bar(
-                summary_df,
-                x="Channel",
-                y="Subscribers",
-                title="Subscribers by Channel",
-                color="Subscribers",
-                color_continuous_scale=["#330000", "#ff0000"],
-            )
-            fig.update_layout(**PLOTLY_DARK, showlegend=False)
+            c1, c2 = st.columns(2)
+            with c1:
+                fig = px.bar(summary_df, x="Channel", y="Subscribers", title="Subscribers by Channel",
+                             color="Subscribers", color_continuous_scale=["#1a0000","#ff0033"])
+                fig.update_layout(**PLOTLY, showlegend=False)
+                fig.update_traces(marker_line_width=0)
+                st.plotly_chart(fig, use_container_width=True)
+            with c2:
+                fig2 = px.bar(summary_df, x="Channel", y="Avg Views/Day", title="Avg Views/Day by Channel",
+                              color="Avg Views/Day", color_continuous_scale=["#001a33","#1e8fff"])
+                fig2.update_layout(**PLOTLY, showlegend=False)
+                fig2.update_traces(marker_line_width=0)
+                st.plotly_chart(fig2, use_container_width=True)
+
+# ═══════════════════════════════════════════
+# CHANNEL DETAIL
+# ═══════════════════════════════════════════
+with T_DETAIL:
+    selected = st.selectbox("Channel", list(st.session_state.channels.keys()), label_visibility="collapsed")
+    info     = st.session_state.channels[selected]
+    stats    = info.get("channel_stats",{})
+    ch_df    = info.get("data")
+
+    head_l, head_r = st.columns([5,2])
+    with head_l:
+        st.markdown(f"""<div style="margin-bottom:4px">
+            <h1>{stats.get('channel_name', selected)}</h1>
+            <p style="color:var(--text-muted);font-size:12px;font-family:var(--font-mono)">
+                ID: {info['id']}  •  Last refreshed: {info.get('last_refreshed','Never')}
+            </p></div>""", unsafe_allow_html=True)
+    with head_r:
+        if st.button("↺  Refresh Channel", type="primary", use_container_width=True):
+            with st.spinner("Fetching from YouTube..."):
+                try:
+                    fetch_channel_data.clear()
+                    df_new, stats_new = fetch_channel_data(st.session_state.api_key, info["id"])
+                    ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    st.session_state.channels[selected].update({"data":df_new,"channel_stats":stats_new,"last_refreshed":ts})
+                    save_channel_to_db(selected, info["id"], stats_new, df_new, ts, info.get("notes",""), info.get("ideas",{}))
+                    save_snapshot_to_db(selected, stats_new["subscribers"], stats_new["total_views"])
+                    st.success("Done!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(str(e))
+
+    st.divider()
+
+    if ch_df is None or ch_df.empty:
+        st.markdown('<div class="alert alert-info"><div class="alert-icon">ℹ️</div><div class="alert-body"><div class="alert-title">No data loaded</div><div class="alert-desc">Click Refresh Channel to load video data.</div></div></div>', unsafe_allow_html=True)
+        st.stop()
+
+    m1,m2,m3,m4,m5 = st.columns(5)
+    m1.metric("Subscribers",     fmt(stats.get("subscribers",0)))
+    m2.metric("Total Views",     fmt(stats.get("total_views",0)))
+    m3.metric("Videos Analyzed", len(ch_df))
+    m4.metric("Avg Views",       fmt(int(ch_df["Views"].mean())))
+    m5.metric("Avg Views / Day", f"{ch_df['Views per Day'].mean():.1f}")
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    DT1,DT2,DT3,DT4,DT5,DT6 = st.tabs(["  Videos  ","  Charts  ","  Upload Timing  ","  Content Series  ","  AI Ideas  ","  Notes  "])
+
+    # ── VIDEOS ──
+    with DT1:
+        c_a, c_b = st.columns([2,4])
+        view_mode = c_a.radio("View", ["Grid","Table"], horizontal=True, label_visibility="collapsed")
+        sort_by   = c_b.selectbox("Sort by", ["Views","Views per Day","Like Rate %","Comment Rate %","Published"], label_visibility="collapsed")
+        sorted_df = ch_df.sort_values(sort_by, ascending=(sort_by=="Published")).reset_index(drop=True)
+        if view_mode == "Grid":
+            render_video_grid(sorted_df, max_cards=24)
+        else:
+            disp = sorted_df[["Title","Published","Views","Views per Day","Like Rate %","Comment Rate %","Likes","Comments","URL"]].copy()
+            disp["Published"] = disp["Published"].dt.strftime("%Y-%m-%d")
+            st.dataframe(disp, use_container_width=True, hide_index=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.download_button("⬇  Export CSV", ch_df.to_csv(index=False).encode(), f"{selected.replace(' ','_')}.csv","text/csv")
+
+    # ── CHARTS ──
+    with DT2:
+        c1,c2 = st.columns(2)
+        with c1:
+            top10 = ch_df.nlargest(10,"Views").sort_values("Views")
+            fig = px.bar(top10, x="Views", y="Title", orientation="h", title="Top 10 by Total Views",
+                         color="Views", color_continuous_scale=["#1a0000","#ff0033"])
+            fig.update_layout(**PLOTLY, showlegend=False, height=380)
+            fig.update_traces(marker_line_width=0)
+            fig.update_yaxes(tickfont=dict(size=10,color="#737373"))
+            st.plotly_chart(fig, use_container_width=True)
+        with c2:
+            top10m = ch_df.nlargest(10,"Views per Day").sort_values("Views per Day")
+            fig2 = px.bar(top10m, x="Views per Day", y="Title", orientation="h", title="Top 10 by Momentum",
+                          color="Views per Day", color_continuous_scale=["#001a33","#1e8fff"])
+            fig2.update_layout(**PLOTLY, showlegend=False, height=380)
+            fig2.update_traces(marker_line_width=0)
+            fig2.update_yaxes(tickfont=dict(size=10,color="#737373"))
+            st.plotly_chart(fig2, use_container_width=True)
+
+        trend = ch_df.sort_values("Published")
+        fig3 = go.Figure()
+        fig3.add_trace(go.Scatter(x=trend["Published"], y=trend["Views"], mode="lines+markers",
+            line=dict(color="#ff0033",width=2), marker=dict(color="#ff0033",size=5),
+            fill="tozeroy", fillcolor="rgba(255,0,51,0.06)", name="Views"))
+        fig3.update_layout(**PLOTLY, title="Views Over Time", height=300)
+        st.plotly_chart(fig3, use_container_width=True)
+
+        fig4 = px.scatter(ch_df, x="Views", y="Like Rate %", size="Comments", color="Comment Rate %",
+                          hover_name="Title", title="Engagement Map — bubble size = Comments",
+                          color_continuous_scale="Reds")
+        fig4.update_layout(**PLOTLY, height=350)
+        st.plotly_chart(fig4, use_container_width=True)
+
+    # ── UPLOAD TIMING ──
+    with DT3:
+        day_order = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+        temp = ch_df.copy(); temp["Day"] = temp["Published"].dt.day_name()
+        day_avg = temp.groupby("Day")["Views"].mean().reindex(day_order).dropna()
+
+        if not day_avg.empty:
+            best_day = day_avg.idxmax(); best_avg = day_avg.max()
+            st.markdown(f"""<div class="best-day">
+                <div class="best-day-icon">📅</div>
+                <div>
+                    <div class="best-day-label">Best Day to Upload</div>
+                    <div class="best-day-value">{best_day}</div>
+                    <div class="best-day-sub">Avg {fmt(int(best_avg))} views on videos posted this day</div>
+                </div></div>""", unsafe_allow_html=True)
+
+            fig = px.bar(x=day_avg.index, y=day_avg.values, title="Avg Views by Upload Day",
+                         labels={"x":"","y":"Avg Views"}, color=day_avg.values,
+                         color_continuous_scale=["#1a0000","#ff0033"])
+            fig.update_layout(**PLOTLY, showlegend=False)
             fig.update_traces(marker_line_width=0)
             st.plotly_chart(fig, use_container_width=True)
 
-# ══════════════════════════════════════════════
-# TAB 3 — CHANNEL DETAIL
-# ══════════════════════════════════════════════
-with TAB_DETAIL:
-    if not st.session_state.channels:
-        st.info("Add channels to get started.")
-        st.stop()
-
-    # Channel selector
-    selected = st.selectbox("Select Channel", list(st.session_state.channels.keys()), label_visibility="collapsed")
-    info = st.session_state.channels[selected]
-    ch_id = info["id"]
-
-    col_h1, col_h2 = st.columns([6, 2])
-    with col_h1:
-        stats_preview = info.get("channel_stats", {})
-        if stats_preview.get("channel_name"):
-            st.markdown(f"## {stats_preview['channel_name']}")
-        else:
-            st.markdown(f"## {selected}")
-        st.caption(f"Channel ID: `{ch_id}`  •  Last refreshed: {info.get('last_refreshed', 'Never')}")
-    with col_h2:
-        if st.button("🔄  Refresh This Channel", type="primary", use_container_width=True):
-            with st.spinner("Fetching from YouTube..."):
-                try:
-                    df_new, stats_new = fetch_channel_data(API_KEY, ch_id)
-                    st.session_state.channels[selected]["data"] = df_new
-                    st.session_state.channels[selected]["channel_stats"] = stats_new
-                    st.session_state.channels[selected]["last_refreshed"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                    save_snapshot(selected, {"subscribers": stats_new["subscribers"], "total_views": stats_new["total_views"]})
-                    save_data()
-                    st.success("Refreshed!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Error: {e}")
-
-    df = info.get("data")
-    stats = info.get("channel_stats", {})
-
-    if df is None or df.empty:
-        st.info("Click **Refresh This Channel** to load data.")
-        st.stop()
-
-    # Key metrics
-    st.markdown("<br>", unsafe_allow_html=True)
-    m1, m2, m3, m4, m5 = st.columns(5)
-    m1.metric("Subscribers", fmt_number(stats.get("subscribers", 0)))
-    m2.metric("Total Views", fmt_number(stats.get("total_views", 0)))
-    m3.metric("Videos Analyzed", len(df))
-    m4.metric("Avg Views / Video", fmt_number(int(df["Views"].mean())))
-    m5.metric("Avg Views / Day", f"{df['Views per Day'].mean():.1f}")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # Sub-tabs
-    DT_VT, DT_CHARTS, DT_TIMING, DT_SERIES, DT_IDEAS, DT_NOTES = st.tabs([
-        "📋  Video Table",
-        "📊  Charts",
-        "🕐  Upload Timing",
-        "🎯  Content Series",
-        "💡  Ideas",
-        "📝  Notes",
-    ])
-
-    # ── Video Table ──
-    with DT_VT:
-        disp = df[["Title", "Published", "Views", "Views per Day", "Like Rate %", "Comment Rate %", "Likes", "Comments", "URL"]].copy()
-        disp["Published"] = disp["Published"].dt.strftime("%Y-%m-%d")
-        sort_col = st.selectbox("Sort by", ["Views", "Views per Day", "Like Rate %", "Comment Rate %", "Published"], index=0)
-        disp = disp.sort_values(sort_col, ascending=False)
-        st.dataframe(disp, use_container_width=True, hide_index=True)
-        st.download_button(
-            "⬇  Export Channel CSV",
-            df.to_csv(index=False).encode(),
-            f"{selected.replace(' ','_')}_data.csv",
-            "text/csv",
-        )
-
-    # ── Charts ──
-    with DT_CHARTS:
-        c1, c2 = st.columns(2)
-
-        with c1:
-            top10 = df.nlargest(10, "Views").sort_values("Views")
-            fig_top = px.bar(
-                top10,
-                x="Views",
-                y="Title",
-                orientation="h",
-                title="Top 10 Videos by Views",
-                color="Views",
-                color_continuous_scale=["#220000", "#ff0000"],
-            )
-            fig_top.update_layout(**PLOTLY_DARK, showlegend=False)
-            fig_top.update_traces(marker_line_width=0)
-            fig_top.update_yaxes(tickfont_size=11)
-            st.plotly_chart(fig_top, use_container_width=True)
-
-        with c2:
-            top10_vpd = df.nlargest(10, "Views per Day").sort_values("Views per Day")
-            fig_vpd = px.bar(
-                top10_vpd,
-                x="Views per Day",
-                y="Title",
-                orientation="h",
-                title="Top 10 by Views / Day (Momentum)",
-                color="Views per Day",
-                color_continuous_scale=["#001122", "#0099ff"],
-            )
-            fig_vpd.update_layout(**PLOTLY_DARK, showlegend=False)
-            fig_vpd.update_traces(marker_line_width=0)
-            fig_vpd.update_yaxes(tickfont_size=11)
-            st.plotly_chart(fig_vpd, use_container_width=True)
-
-        # Views over time
-        trend = df.sort_values("Published")
-        fig_trend = px.line(
-            trend,
-            x="Published",
-            y="Views",
-            title="Views Over Time",
-            markers=True,
-        )
-        fig_trend.update_traces(line_color="#ff0000", marker_color="#ff6666", marker_size=5)
-        fig_trend.update_layout(**PLOTLY_DARK)
-        st.plotly_chart(fig_trend, use_container_width=True)
-
-        # Like + Comment rate scatter
-        fig_scatter = px.scatter(
-            df,
-            x="Views",
-            y="Like Rate %",
-            size="Comments",
-            color="Comment Rate %",
-            hover_name="Title",
-            title="Engagement Map (size = Comment count)",
-            color_continuous_scale="Reds",
-        )
-        fig_scatter.update_layout(**PLOTLY_DARK)
-        st.plotly_chart(fig_scatter, use_container_width=True)
-
-    # ── Upload Timing ──
-    with DT_TIMING:
-        st.markdown("### Upload Schedule Optimizer")
-        st.caption("Best days to post based on your historical performance.")
-
-        day_avg = get_best_upload_day(df)
-        if not day_avg.empty:
-            best_day = day_avg.idxmax()
-            best_views = day_avg.max()
-
-            st.markdown(f'<div class="success-box">✅ Best day to upload: <strong>{best_day}</strong> — avg {fmt_number(int(best_views))} views per video</div>', unsafe_allow_html=True)
-
-            fig_days = px.bar(
-                x=day_avg.index,
-                y=day_avg.values,
-                title="Average Views by Upload Day",
-                labels={"x": "Day of Week", "y": "Avg Views"},
-                color=day_avg.values,
-                color_continuous_scale=["#1a0000", "#ff0000"],
-            )
-            fig_days.update_layout(**PLOTLY_DARK, showlegend=False)
-            fig_days.update_traces(marker_line_width=0)
-            st.plotly_chart(fig_days, use_container_width=True)
-
-        # Upload frequency
-        st.markdown("### Upload Frequency")
-        monthly = df.copy()
+        monthly = ch_df.copy()
         monthly["Month"] = monthly["Published"].dt.to_period("M").astype(str)
-        freq = monthly.groupby("Month").size().reset_index(name="Videos Posted")
-        fig_freq = px.bar(freq, x="Month", y="Videos Posted", title="Videos Posted Per Month")
-        fig_freq.update_traces(marker_color="#444", marker_line_width=0)
-        fig_freq.update_layout(**PLOTLY_DARK)
-        st.plotly_chart(fig_freq, use_container_width=True)
+        freq = monthly.groupby("Month").agg(Videos=("Title","count"), Avg_Views=("Views","mean")).reset_index()
+        fig2 = go.Figure()
+        fig2.add_trace(go.Bar(x=freq["Month"], y=freq["Videos"], name="Videos Posted", marker_color="#252525", marker_line_width=0))
+        fig2.add_trace(go.Scatter(x=freq["Month"], y=freq["Avg_Views"], name="Avg Views", yaxis="y2",
+                                  line=dict(color="#ff0033",width=2), marker=dict(color="#ff0033",size=5)))
+        fig2.update_layout(**PLOTLY, title="Upload Frequency vs Avg Views",
+                           yaxis2=dict(overlaying="y",side="right",gridcolor="#1e1e1e",color="#737373"),
+                           legend=dict(orientation="h",y=1.1))
+        st.plotly_chart(fig2, use_container_width=True)
 
-    # ── Content Series ──
-    with DT_SERIES:
-        st.markdown("### Content Series Tracker")
-        st.caption("Identify which topics or series are performing best.")
+    # ── CONTENT SERIES ──
+    with DT4:
+        st.markdown('<div class="section-label">Topic Analysis</div>', unsafe_allow_html=True)
+        titles = ch_df["Title"].tolist()
+        words_all = []
+        for t in titles: words_all.extend(re.findall(r"\b[A-Za-z]{3,}\b", t))
+        stop = {"this","that","with","from","have","what","your","they","their","will","more","just","been",
+                "like","also","when","then","than","about","which","there","after","video","youtube",
+                "channel","episode","part","feat","official","full","new","the","and","for","are","but",
+                "not","you","all","can","her","was","one","our","out","day","get","has","him","his",
+                "how","its","let","may","now","old","own","see","two","way","who","boy","did","use"}
+        filtered = [w.lower() for w in words_all if w.lower() not in stop and len(w) > 3]
+        top_words = Counter(filtered).most_common(20)
 
-        # Extract common phrases from titles (2-word patterns)
-        title_words = []
-        for title in df["Title"].tolist():
-            words = re.findall(r"\b[A-Za-z]{3,}\b", title)
-            title_words.extend([words[i] + " " + words[i+1] for i in range(len(words)-1)])
+        if top_words:
+            tags_html = '<div class="tags">'
+            for word, count in top_words[:14]:
+                mask  = ch_df["Title"].str.contains(word, case=False, na=False)
+                avg_v = int(ch_df.loc[mask,"Views"].mean()) if mask.any() else 0
+                cls   = "tag tag-hot" if avg_v > ch_df["Views"].mean() else "tag"
+                tags_html += f'<span class="{cls}">{word} ({count})</span>'
+            tags_html += '</div>'
+            st.markdown(tags_html, unsafe_allow_html=True)
+            st.caption("🔴 Red = above-average views for this keyword")
 
-        stop2 = {"This Is", "That Is", "And The", "In The", "On The", "Of The", "To The", "Is A", "It Is", "You Are", "With The", "For The", "How To"}
-        filtered_phrases = [p for p in title_words if p.title() not in stop2 and len(p) > 6]
-        phrase_counts = Counter(filtered_phrases).most_common(15)
+        phrases = []
+        for t in titles:
+            ws = re.findall(r"\b[A-Za-z]{3,}\b", t)
+            phrases.extend([f"{ws[i]} {ws[i+1]}" for i in range(len(ws)-1)])
+        stop_phrases = {"and the","in the","on the","of the","to the","is a","it is","with the","for the","how to","that is","this is","you are"}
+        phrases_f = [p.lower() for p in phrases if p.lower() not in stop_phrases]
+        phrase_counts = Counter(phrases_f).most_common(12)
 
         if phrase_counts:
-            phrase_df = pd.DataFrame(phrase_counts, columns=["Phrase / Topic", "Count"])
-            # Map phrase to avg views
-            def avg_views_for_phrase(phrase):
-                mask = df["Title"].str.contains(re.escape(phrase), case=False, na=False)
-                return df.loc[mask, "Views"].mean() if mask.any() else 0
+            phr_df = pd.DataFrame(phrase_counts, columns=["Phrase","Count"])
+            phr_df["Avg Views"] = phr_df["Phrase"].apply(
+                lambda p: int(ch_df.loc[ch_df["Title"].str.contains(p,case=False,na=False),"Views"].mean())
+                if ch_df["Title"].str.contains(p,case=False,na=False).any() else 0)
+            phr_df = phr_df.sort_values("Avg Views", ascending=False)
+            fig = px.scatter(phr_df, x="Count", y="Avg Views", text="Phrase",
+                             title="Topic Frequency vs. Avg Views",
+                             color="Avg Views", color_continuous_scale="Reds", size="Count")
+            fig.update_traces(textposition="top center", textfont=dict(size=10,color="#e8e8e8"))
+            fig.update_layout(**PLOTLY, height=400)
+            st.plotly_chart(fig, use_container_width=True)
+            st.dataframe(phr_df, use_container_width=True, hide_index=True)
 
-            phrase_df["Avg Views"] = phrase_df["Phrase / Topic"].apply(avg_views_for_phrase).round(0).astype(int)
-            phrase_df = phrase_df.sort_values("Avg Views", ascending=False)
-
-            fig_series = px.scatter(
-                phrase_df,
-                x="Count",
-                y="Avg Views",
-                text="Phrase / Topic",
-                title="Topic Frequency vs. Avg Views",
-                color="Avg Views",
-                color_continuous_scale="Reds",
-                size="Count",
-            )
-            fig_series.update_traces(textposition="top center", textfont_size=10)
-            fig_series.update_layout(**PLOTLY_DARK)
-            st.plotly_chart(fig_series, use_container_width=True)
-
-            st.dataframe(phrase_df, use_container_width=True, hide_index=True)
+    # ── AI IDEAS ──
+    with DT5:
+        st.markdown('<div class="section-label">Claude AI — Strategic Ideas</div>', unsafe_allow_html=True)
+        if not st.session_state.anthropic_key:
+            st.markdown('<div class="alert alert-warn"><div class="alert-icon">⚠️</div><div class="alert-body"><div class="alert-title">Anthropic API key required</div><div class="alert-desc">Add your key in the sidebar to enable AI-powered ideas.</div></div></div>', unsafe_allow_html=True)
         else:
-            st.info("Not enough title data for series analysis.")
+            if st.button("✦  Generate Strategic Ideas with Claude", type="primary"):
+                with st.spinner("Claude is analyzing your channel..."):
+                    try:
+                        result = generate_ai_ideas(
+                            st.session_state.anthropic_key, selected, ch_df,
+                            stats.get("description",""))
+                        st.session_state.ideas_cache[selected] = result
+                        st.session_state.channels[selected]["ideas"] = {"ai_text": result}
+                        save_channel_to_db(selected, info["id"], stats, ch_df,
+                                           info.get("last_refreshed",""), info.get("notes",""), {"ai_text": result})
+                    except Exception as e:
+                        st.error(f"Claude API error: {e}")
 
-    # ── Ideas ──
-    with DT_IDEAS:
-        st.markdown("### Video Ideas Generator")
-        st.caption("Analyzes your top-performing titles to suggest new content directions.")
+            cached = (st.session_state.ideas_cache.get(selected) or
+                      info.get("ideas",{}).get("ai_text",""))
+            if cached:
+                st.markdown(f"""<div class="ai-response">
+                    <div class="ai-header">
+                        <div class="ai-dot"></div>
+                        <div class="ai-label">Claude Analysis</div>
+                    </div>
+                    <div style="font-size:13px;line-height:1.9;color:#c8c8c8;white-space:pre-wrap">{cached}</div>
+                </div>""", unsafe_allow_html=True)
 
-        if st.button("✨  Generate Ideas", type="primary"):
-            with st.spinner("Analyzing channel niche..."):
-                ideas_data = generate_ideas(selected, df)
-                st.session_state.generated_ideas[selected] = ideas_data
-                save_data()
-
-        ideas = st.session_state.generated_ideas.get(selected, {})
-        if ideas:
-            st.markdown("**Detected Topics:**")
-            tags_html = " ".join([f'<span style="background:#1a0000;border:1px solid #ff3333;color:#ff9999;padding:3px 10px;border-radius:20px;font-size:12px;margin:2px;display:inline-block">{t}</span>' for t in ideas.get("topics", [])])
-            st.markdown(tags_html, unsafe_allow_html=True)
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            st.markdown("**Suggested Video Ideas:**")
-            for idea in ideas.get("ideas", []):
-                st.markdown(f'<div class="info-box">🎬  {idea}</div>', unsafe_allow_html=True)
-
-            if ideas.get("inspiration"):
-                st.markdown("<br>**Top videos that inspired these ideas:**")
-                for t in ideas.get("inspiration", [])[:3]:
-                    st.caption(f"• {t}")
-
-    # ── Notes ──
-    with DT_NOTES:
-        st.markdown("### Team Notes")
-        st.caption("Shared notes for this channel — saved automatically.")
-        current_notes = st.session_state.notes.get(selected, "")
-        new_notes = st.text_area("", value=current_notes, height=200, placeholder="Add notes, observations, or action items here...")
+    # ── NOTES ──
+    with DT6:
+        st.markdown('<div class="section-label">Team Notes</div>', unsafe_allow_html=True)
+        new_notes = st.text_area("Notes", value=info.get("notes",""), height=220,
+                                 placeholder="Observations, strategy, action items...",
+                                 label_visibility="collapsed")
         if st.button("💾  Save Notes", type="primary"):
-            st.session_state.notes[selected] = new_notes
-            save_data()
-            st.success("Notes saved.")
+            st.session_state.channels[selected]["notes"] = new_notes
+            save_channel_to_db(selected, info["id"], stats, ch_df,
+                               info.get("last_refreshed",""), new_notes, info.get("ideas",{}))
+            st.success("Saved.")
 
-# ══════════════════════════════════════════════
-# TAB 4 — GROWTH TRENDS
-# ══════════════════════════════════════════════
-with TAB_GROWTH:
-    st.markdown("## Growth Trends")
-    st.caption("Historical snapshots of subscriber and view growth over time. Data is saved each time you refresh a channel.")
+# ═══════════════════════════════════════════
+# GROWTH TRENDS
+# ═══════════════════════════════════════════
+with T_GROWTH:
+    st.markdown("""<div class="page-header">
+        <div class="page-header-left"><h1>Growth Trends</h1>
+        <p>Historical snapshots — updated every time you refresh a channel</p>
+        </div></div>""", unsafe_allow_html=True)
 
-    if not st.session_state.snapshots:
-        st.info("No growth data yet. Refresh channels over time to build historical snapshots.")
+    growth_ch = st.selectbox("Channel", list(st.session_state.channels.keys()), key="g_ch")
+    snap_df   = load_snapshots_from_db(growth_ch)
+
+    if snap_df.empty:
+        st.markdown('<div class="alert alert-info"><div class="alert-icon">📸</div><div class="alert-body"><div class="alert-title">No snapshots yet</div><div class="alert-desc">Refresh this channel over multiple days to build a growth history.</div></div></div>', unsafe_allow_html=True)
     else:
-        growth_channel = st.selectbox("Select Channel", list(st.session_state.snapshots.keys()), key="growth_ch")
-        snap_data = st.session_state.snapshots.get(growth_channel, {})
+        snap_df["snapshot_date"] = pd.to_datetime(snap_df["snapshot_date"])
+        g1,g2 = st.columns(2)
+        with g1:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=snap_df["snapshot_date"], y=snap_df["subscribers"],
+                mode="lines+markers", line=dict(color="#ff0033",width=2), marker=dict(size=6,color="#ff0033"),
+                fill="tozeroy", fillcolor="rgba(255,0,51,0.06)", name="Subscribers"))
+            fig.update_layout(**PLOTLY, title="Subscriber Growth", height=300)
+            st.plotly_chart(fig, use_container_width=True)
+        with g2:
+            fig2 = go.Figure()
+            fig2.add_trace(go.Scatter(x=snap_df["snapshot_date"], y=snap_df["total_views"],
+                mode="lines+markers", line=dict(color="#1e8fff",width=2), marker=dict(size=6,color="#1e8fff"),
+                fill="tozeroy", fillcolor="rgba(30,143,255,0.06)", name="Total Views"))
+            fig2.update_layout(**PLOTLY, title="Total Views Growth", height=300)
+            st.plotly_chart(fig2, use_container_width=True)
 
-        if snap_data:
-            dates = sorted(snap_data.keys())
-            subs_series = [snap_data[d].get("subscribers", 0) for d in dates]
-            views_series = [snap_data[d].get("total_views", 0) for d in dates]
+        if len(snap_df) > 1:
+            snap_df = snap_df.sort_values("snapshot_date")
+            snap_df["Δ Subscribers"] = snap_df["subscribers"].diff().fillna(0).astype(int)
+            snap_df["Δ Total Views"] = snap_df["total_views"].diff().fillna(0).astype(int)
+            snap_df["Date"]          = snap_df["snapshot_date"].dt.strftime("%Y-%m-%d")
+            st.dataframe(
+                snap_df[["Date","subscribers","total_views","Δ Subscribers","Δ Total Views"]]
+                .rename(columns={"subscribers":"Subscribers","total_views":"Total Views"})
+                .sort_values("Date", ascending=False),
+                use_container_width=True, hide_index=True)
 
-            snap_df = pd.DataFrame({"Date": dates, "Subscribers": subs_series, "Total Views": views_series})
-
-            g1, g2 = st.columns(2)
-            with g1:
-                fig_sub_growth = px.line(snap_df, x="Date", y="Subscribers", title="Subscriber Growth", markers=True)
-                fig_sub_growth.update_traces(line_color="#ff0000", marker_color="#ff6666")
-                fig_sub_growth.update_layout(**PLOTLY_DARK)
-                st.plotly_chart(fig_sub_growth, use_container_width=True)
-
-            with g2:
-                fig_view_growth = px.line(snap_df, x="Date", y="Total Views", title="Total Views Growth", markers=True)
-                fig_view_growth.update_traces(line_color="#0099ff", marker_color="#66ccff")
-                fig_view_growth.update_layout(**PLOTLY_DARK)
-                st.plotly_chart(fig_view_growth, use_container_width=True)
-
-            st.dataframe(snap_df.sort_values("Date", ascending=False), use_container_width=True, hide_index=True)
-
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 # FOOTER
-# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
+st.markdown("<br><br>", unsafe_allow_html=True)
 st.divider()
-st.caption("Chamberlin Media Monitor  •  Built for your team  •  Data from YouTube Data API v3")
+st.markdown('<p style="color:var(--text-dim);font-size:11px;font-family:var(--font-mono)">Chamberlin Media Monitor  •  YouTube Data API v3  •  Claude AI  •  Built for Chamberlin Media</p>', unsafe_allow_html=True)
