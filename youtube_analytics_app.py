@@ -271,6 +271,12 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, channel_name TEXT NOT NULL,
             snapshot_date TEXT NOT NULL, subscribers INTEGER DEFAULT 0, total_views INTEGER DEFAULT 0,
             UNIQUE(channel_name, snapshot_date))""")
+        # Migrate: strip any time component from existing snapshot dates
+        db.execute("""
+            UPDATE snapshots
+            SET snapshot_date = substr(snapshot_date, 1, 10)
+            WHERE length(snapshot_date) > 10
+        """)
 
 def load_channels_from_db() -> dict:
     channels = {}
@@ -333,7 +339,13 @@ def load_snapshots_from_db(channel_name) -> pd.DataFrame:
         rows = db.execute(
             "SELECT snapshot_date,subscribers,total_views FROM snapshots WHERE channel_name=? ORDER BY snapshot_date",
             (channel_name,)).fetchall()
-    return pd.DataFrame([dict(r) for r in rows]) if rows else pd.DataFrame()
+    if not rows:
+        return pd.DataFrame()
+    df = pd.DataFrame([dict(r) for r in rows])
+    # Strip any time component, force clean date strings
+    df["snapshot_date"] = pd.to_datetime(df["snapshot_date"]).dt.normalize().dt.date
+    df["snapshot_date"] = pd.to_datetime(df["snapshot_date"])
+    return df
 
 # ─────────────────────────────────────────────────────────────
 # SECRETS
@@ -995,7 +1007,7 @@ with T_GROWTH:
     if snap_df.empty:
         st.markdown('<div class="alert alert-info"><div class="alert-icon">📸</div><div class="alert-body"><div class="alert-title">No snapshots yet</div><div class="alert-desc">Refresh this channel over multiple days to build a growth history.</div></div></div>', unsafe_allow_html=True)
     else:
-        snap_df["snapshot_date"] = pd.to_datetime(snap_df["snapshot_date"])
+        snap_df["snapshot_date"] = pd.to_datetime(snap_df["snapshot_date"]).dt.normalize()
         g1,g2 = st.columns(2)
         with g1:
             fig = go.Figure()
