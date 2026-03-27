@@ -4,206 +4,205 @@ from googleapiclient.discovery import build
 import plotly.express as px
 from collections import Counter
 import re
-import json
-import os
 from datetime import datetime
-import time
 
-st.set_page_config(page_title="YouTube Multi-Channel Live Analytics", layout="wide")
-st.title("🎥 Multi-Channel YouTube Live Analytics + Smart Suggestions")
+st.set_page_config(page_title="YouTube Channel Analytics", layout="wide")
 
-# ==================== API KEY ====================
+st.title("YouTube Multi-Channel Analytics")
+
+# API Key handling
 if "YOUTUBE" in st.secrets:
-    API_KEY = st.secrets["YOUTUBE"]["API_KEY"]
-    st.sidebar.success("✅ API key loaded securely")
+    api_key = st.secrets["YOUTUBE"]["API_KEY"]
 else:
-    API_KEY = st.sidebar.text_input("YouTube Data API Key", type="password")
+    api_key = st.sidebar.text_input("YouTube Data API Key", type="password")
 
-st.sidebar.header("📺 Add Channels (URL or @handle)")
+st.sidebar.header("Channels")
 
 if "channels" not in st.session_state:
     st.session_state.channels = {}
 
-# Add new channel by URL
-with st.sidebar.expander("➕ Add Channel"):
-    name = st.text_input("Channel Nickname (e.g. Main Channel)")
-    url = st.text_input("YouTube Channel URL or @handle", placeholder="https://www.youtube.com/@yourchannel or @yourchannel")
-    if st.button("Add Channel") and name and url and API_KEY:
-        # Resolve URL to Channel ID
-        try:
-            youtube = build("youtube", "v3", developerKey=API_KEY)
-            channel_id = get_channel_id(youtube, url)
-            st.session_state.channels[name] = {"id": channel_id, "data": None, "last_refresh": None}
-            st.success(f"✅ Added {name} (ID: {channel_id})")
-        except Exception as e:
-            st.error(f"Could not resolve URL: {e}")
+# Add channel section
+with st.sidebar.expander("Add New Channel"):
+    nickname = st.text_input("Channel Nickname")
+    channel_input = st.text_input("YouTube Channel URL or @handle", 
+                                  placeholder="https://www.youtube.com/@example or @example")
+    
+    if st.button("Add Channel"):
+        if not nickname or not channel_input:
+            st.sidebar.error("Please fill in both nickname and URL/handle")
+        elif not api_key:
+            st.sidebar.error("Please provide your YouTube API key")
+        else:
+            try:
+                youtube = build("youtube", "v3", developerKey=api_key)
+                channel_id = resolve_channel_id(youtube, channel_input)
+                st.session_state.channels[nickname] = {
+                    "id": channel_id,
+                    "data": None,
+                    "last_refresh": None
+                }
+                st.sidebar.success(f"Channel added: {nickname}")
+            except Exception as e:
+                st.sidebar.error(f"Error adding channel: {str(e)}")
 
-# Helper function to convert URL/@handle to Channel ID
-def get_channel_id(youtube, url_or_handle):
-    handle = url_or_handle.strip()
-    if handle.startswith("https://"):
-        # Extract handle or ID from full URL
-        if "/@ " in handle:
-            handle = handle.split("@")[-1].split("/")[0]
-        elif "/channel/" in handle:
-            return handle.split("/channel/")[-1].split("/")[0]
-        elif "/c/" in handle or "/user/" in handle:
-            # Fallback - search by name (less accurate)
-            search_resp = youtube.search().list(part="snippet", q=handle.split("/")[-1], type="channel", maxResults=1).execute()
-            return search_resp["items"][0]["snippet"]["channelId"]
-    if handle.startswith("@"):
-        handle = handle[1:]
-    # Use forHandle (best for @handles)
-    resp = youtube.channels().list(part="id", forHandle=handle).execute()
-    if resp["items"]:
-        return resp["items"][0]["id"]
-    raise ValueError("Channel not found")
-
-# List & remove channels
+# List existing channels with remove option
 for name in list(st.session_state.channels.keys()):
     col1, col2 = st.sidebar.columns([4, 1])
-    col1.write(f"• {name}")
-    if col2.button("🗑", key=f"rm_{name}"):
+    col1.write(name)
+    if col2.button("Remove", key=f"remove_{name}"):
         del st.session_state.channels[name]
         st.rerun()
 
-if not API_KEY:
-    st.warning("👆 Enter your YouTube API key in the sidebar")
+if not api_key:
+    st.warning("Enter your YouTube Data API key in the sidebar to continue.")
     st.stop()
 
 if not st.session_state.channels:
-    st.info("Add your first channel using a URL or @handle above 👆")
+    st.info("Add at least one channel using the sidebar.")
     st.stop()
 
-# ==================== MAIN APP ====================
-selected_channel = st.selectbox("Select Channel", options=list(st.session_state.channels.keys()))
-channel_info = st.session_state.channels[selected_channel]
+# Main area
+selected = st.selectbox("Select channel to analyze", list(st.session_state.channels.keys()))
+channel_info = st.session_state.channels[selected]
 channel_id = channel_info["id"]
 
-st.subheader(f"📊 Live Analysis for: **{selected_channel}**")
+st.subheader(f"Channel: {selected}")
 st.caption(f"Channel ID: {channel_id} | Last refreshed: {channel_info.get('last_refresh', 'Never')}")
 
-# Live auto-refresh toggle
-live_mode = st.checkbox("🔴 Enable Live Updates (auto-refresh every 10 minutes)", value=False)
-
-# Manual refresh button
-if st.button(f"🔄 Refresh Data Now for {selected_channel}", type="primary") or channel_info["data"] is None:
-    refresh_data(selected_channel, channel_id)
-
-# Auto-refresh loop
-if live_mode:
-    st.info("🔴 Live mode active — refreshing every 10 minutes")
-    if st.button("Stop Live Mode"):
-        live_mode = False
+def resolve_channel_id(youtube, input_str):
+    input_str = input_str.strip()
+    if input_str.startswith("http"):
+        # Extract handle or ID from URL
+        if "/@ " in input_str:
+            handle = input_str.split("@")[-1].split("/")[0]
+        elif "/channel/" in input_str:
+            return input_str.split("/channel/")[-1].split("/")[0]
+        else:
+            handle = input_str.split("/")[-1]
     else:
-        time.sleep(600)  # 10 minutes
-        st.rerun()
+        handle = input_str.lstrip("@")
+    
+    # Try forHandle first (best for @handles)
+    try:
+        resp = youtube.channels().list(part="id", forHandle=handle).execute()
+        if resp.get("items"):
+            return resp["items"][0]["id"]
+    except:
+        pass
+    
+    # Fallback: search by name
+    resp = youtube.search().list(part="snippet", q=handle, type="channel", maxResults=1).execute()
+    if resp.get("items"):
+        return resp["items"][0]["snippet"]["channelId"]
+    raise ValueError("Could not find channel. Check the URL or handle.")
 
-# ==================== REFRESH FUNCTION ====================
-def refresh_data(name, channel_id):
-    with st.spinner("Fetching latest public data from YouTube..."):
-        youtube = build("youtube", "v3", developerKey=API_KEY)
-        
-        # Get channel + uploads playlist
-        channel_resp = youtube.channels().list(part="contentDetails", id=channel_id).execute()
-        uploads_id = channel_resp["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
-        
-        # Fetch up to 100 recent videos
-        videos = []
-        next_page = None
-        for _ in range(2):  # 100 videos max
-            pl_resp = youtube.playlistItems().list(
-                part="contentDetails", playlistId=uploads_id, maxResults=50, pageToken=next_page
-            ).execute()
+if st.button("Refresh Data Now"):
+    with st.spinner("Fetching latest public data..."):
+        try:
+            youtube = build("youtube", "v3", developerKey=api_key)
+            # Get uploads playlist
+            ch_resp = youtube.channels().list(part="contentDetails", id=channel_id).execute()
+            uploads_id = ch_resp["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
             
-            video_ids = [item["contentDetails"]["videoId"] for item in pl_resp["items"]]
+            # Fetch videos
+            videos = []
+            next_page = None
+            for _ in range(2):  # up to ~100 videos
+                pl_resp = youtube.playlistItems().list(
+                    part="contentDetails", 
+                    playlistId=uploads_id, 
+                    maxResults=50, 
+                    pageToken=next_page
+                ).execute()
+                
+                if not pl_resp.get("items"):
+                    break
+                    
+                video_ids = [item["contentDetails"]["videoId"] for item in pl_resp["items"]]
+                vid_resp = youtube.videos().list(
+                    part="snippet,statistics", 
+                    id=",".join(video_ids)
+                ).execute()
+                
+                for item in vid_resp["items"]:
+                    stats = item["statistics"]
+                    snippet = item["snippet"]
+                    videos.append({
+                        "Title": snippet["title"],
+                        "Published": snippet["publishedAt"][:10],
+                        "Views": int(stats.get("viewCount", 0)),
+                        "Likes": int(stats.get("likeCount", 0)),
+                        "Comments": int(stats.get("commentCount", 0)),
+                        "URL": f"https://youtu.be/{item['id']}"
+                    })
+                
+                next_page = pl_resp.get("nextPageToken")
+                if not next_page:
+                    break
             
-            vid_resp = youtube.videos().list(part="snippet,statistics", id=",".join(video_ids)).execute()
+            df = pd.DataFrame(videos)
+            if not df.empty:
+                df["Published"] = pd.to_datetime(df["Published"])
+                df = df.sort_values("Published", ascending=False)
             
-            for item in vid_resp["items"]:
-                stats = item["statistics"]
-                snippet = item["snippet"]
-                videos.append({
-                    "Title": snippet["title"],
-                    "Published": snippet["publishedAt"][:10],
-                    "Views": int(stats.get("viewCount", 0)),
-                    "Likes": int(stats.get("likeCount", 0)),
-                    "Comments": int(stats.get("commentCount", 0)),
-                    "Video ID": item["id"],
-                    "URL": f"https://youtu.be/{item['id']}"
-                })
-            
-            next_page = pl_resp.get("nextPageToken")
-            if not next_page: break
-        
-        df = pd.DataFrame(videos)
-        df["Published"] = pd.to_datetime(df["Published"])
-        df = df.sort_values("Published", ascending=False)
-        
-        st.session_state.channels[name]["data"] = df
-        st.session_state.channels[name]["last_refresh"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        st.success("✅ Data refreshed!")
-        st.rerun()
+            st.session_state.channels[selected]["data"] = df
+            st.session_state.channels[selected]["last_refresh"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+            st.success("Data refreshed successfully.")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Error fetching data: {str(e)}")
 
-# Show results if data exists
+# Display results
 df = channel_info.get("data")
 if df is not None and not df.empty:
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     col1.metric("Total Videos", len(df))
     col2.metric("Total Views", f"{df['Views'].sum():,}")
-    col3.metric("Avg Views/Video", f"{int(df['Views'].mean()):,}")
-    col4.metric("Avg Likes", f"{int(df['Likes'].mean()):,}")
+    col3.metric("Average Views per Video", f"{int(df['Views'].mean()):,}")
 
-    tab1, tab2, tab3, tab4 = st.tabs(["Top Videos", "Trend", "High vs Low", "💡 Smart Suggestions"])
+    tab1, tab2, tab3 = st.tabs(["Top Videos", "Performance Trend", "Content Suggestions"])
 
     with tab1:
-        top = df.nlargest(10, "Views")
-        fig = px.bar(top, x="Views", y="Title", orientation="h", title="Top 10 Videos")
+        top_videos = df.nlargest(10, "Views")
+        fig = px.bar(top_videos, x="Views", y="Title", orientation="h", title="Top 10 Videos by Views")
         st.plotly_chart(fig, use_container_width=True)
-        st.dataframe(top[["Title", "Published", "Views", "Likes", "Comments", "URL"]], use_container_width=True)
+        st.dataframe(top_videos[["Title", "Published", "Views", "Likes", "Comments", "URL"]], use_container_width=True)
 
     with tab2:
-        fig2 = px.line(df.sort_values("Published"), x="Published", y="Views", title="Views Over Time", markers=True)
+        sorted_df = df.sort_values("Published")
+        fig2 = px.line(sorted_df, x="Published", y="Views", title="Views Over Time", markers=True)
         st.plotly_chart(fig2, use_container_width=True)
 
     with tab3:
-        high = df[df["Views"] > df["Views"].quantile(0.75)]
-        low = df[df["Views"] < df["Views"].quantile(0.25)]
-        st.write("**High-Performing** (top 25%)")
-        st.dataframe(high[["Title", "Views", "Likes", "Comments"]].head(8))
-        st.write("**Low-Performing** (bottom 25%)")
-        st.dataframe(low[["Title", "Views", "Likes", "Comments"]].head(8))
-
-    with tab4:
-        if st.button("Generate Fresh Content Suggestions"):
-            with st.spinner("Analyzing your best & worst videos..."):
-                high_titles = high["Title"].tolist()
-                low_titles = low["Title"].tolist()
+        if st.button("Generate Content Suggestions"):
+            with st.spinner("Analyzing your video performance..."):
+                high = df[df["Views"] > df["Views"].quantile(0.7)]
+                low = df[df["Views"] < df["Views"].quantile(0.3)]
                 
-                def top_keywords(titles):
-                    words = [w for title in titles for w in re.sub(r'[^a-zA-Z0-9\s]', '', title.lower()).split() if len(w) > 3]
-                    return Counter(words).most_common(15)
+                def extract_keywords(titles):
+                    words = []
+                    for t in titles:
+                        cleaned = re.sub(r'[^a-zA-Z0-9\s]', '', t.lower())
+                        words.extend([w for w in cleaned.split() if len(w) > 3])
+                    return Counter(words).most_common(10)
                 
-                high_k = top_keywords(high_titles)
-                low_k = top_keywords(low_titles)
+                high_keywords = extract_keywords(high["Title"].tolist())
                 
-                st.subheader("✅ What’s Working (Double Down)")
-                for word, count in high_k[:6]:
-                    st.write(f"• **{word}** appears in your top videos — keep using it!")
+                st.write("**Strong performing topics (double down on these):**")
+                for word, count in high_keywords[:6]:
+                    st.write(f"- {word}")
                 
-                st.subheader("🚫 What to Avoid")
-                for word, count in low_k[:4]:
-                    st.write(f"• **{word}** is in your weaker videos")
+                st.write("\n**Suggested new video ideas based on your best content:**")
+                if high_keywords:
+                    top_word = high_keywords[0][0].title()
+                    st.write(f"1. {top_word} Tutorial - Complete Guide (2026)")
+                    st.write(f"2. How I Improved My {top_word} Results")
+                    st.write(f"3. Common Mistakes with {top_word} (And How to Fix Them)")
+                    st.write(f"4. {top_word} vs Traditional Methods - Which Wins?")
                 
-                st.subheader("🚀 Ready-to-Use New Video Ideas")
-                st.write("1. " + high_k[0][0].title() + " Tutorial – Step-by-Step (2026 Update)")
-                st.write("2. Behind the Scenes of my " + high_titles[0][:40] + "...")
-                st.write("3. Top 10 Mistakes with " + high_k[1][0].title())
-                st.write("4. " + high_k[0][0].title() + " vs " + low_k[0][0].title() + " – Which Wins?")
-                st.info("These ideas are based 100% on **your own data** — they have the highest chance of performing well!")
+                st.info("These suggestions are generated from your own video performance data.")
 
 else:
-    st.info("Click 'Refresh Data Now' to load stats")
+    st.info("Click 'Refresh Data Now' to load statistics for this channel.")
 
-st.caption("App updated just for you • Live public data from YouTube • Suggestions powered by your real performance")
+st.caption("Public data from YouTube Data API • Suggestions based on your channel performance")
