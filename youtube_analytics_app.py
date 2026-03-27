@@ -397,6 +397,15 @@ def fetch_channel_data(api_key: str, channel_id: str):
         df["Comment Rate %"] = (df["Comments"] / df["Views"].replace(0,1) * 100).round(2)
     return df, stats
 
+def lookup_channel_name(api_key: str, channel_id: str) -> str:
+    """Fetch just the channel title — cheap single API call."""
+    youtube = build("youtube", "v3", developerKey=api_key)
+    resp = youtube.channels().list(part="snippet", id=channel_id).execute()
+    if not resp.get("items"):
+        raise ValueError(f"No channel found for ID: {channel_id}")
+    return resp["items"][0]["snippet"]["title"]
+
+
 # ─────────────────────────────────────────────────────────────
 # CLAUDE AI
 # ─────────────────────────────────────────────────────────────
@@ -437,7 +446,7 @@ Based on this data, provide:
 Be specific, strategic, and data-driven. Reference actual patterns from the titles."""
 
     msg = client.messages.create(
-        model="claude-sonnet-4-20250514", max_tokens=1400,
+        model="claude-haiku-4-5-20251001", max_tokens=1400,
         messages=[{"role": "user", "content": prompt}])
     return msg.content[0].text
 
@@ -539,22 +548,34 @@ with st.sidebar:
     st.markdown('<div class="section-label" style="margin-top:16px">Channels</div>', unsafe_allow_html=True)
 
     with st.expander("➕  Add Channel"):
-        new_nick = st.text_input("Nickname", placeholder="Brand Name")
-        new_id   = st.text_input("Channel ID", placeholder="UCxxxxxxxxxxxxxxxxxxxx")
+        new_id = st.text_input("Channel ID", placeholder="UCxxxxxxxxxxxxxxxxxxxx")
+        st.caption("The channel name will be fetched automatically.")
         if st.button("Add Channel", type="primary", use_container_width=True):
             if not st.session_state.api_key:
                 st.error("Enter YouTube API key first.")
-            elif not new_nick or not new_id:
-                st.error("Fill both fields.")
-            elif new_nick in st.session_state.channels:
-                st.error("Already added.")
+            elif not new_id:
+                st.error("Enter a Channel ID.")
             else:
-                st.session_state.channels[new_nick] = {
-                    "id": new_id.strip(), "data": None, "channel_stats": {},
-                    "last_refreshed": "Never", "notes": "", "ideas": {}}
-                save_channel_to_db(new_nick, new_id.strip(), {}, None, "Never")
-                st.success(f"Added {new_nick}")
-                st.rerun()
+                cid = new_id.strip()
+                # Check for duplicate IDs
+                existing_ids = [v["id"] for v in st.session_state.channels.values()]
+                if cid in existing_ids:
+                    st.error("That channel is already added.")
+                else:
+                    with st.spinner("Looking up channel..."):
+                        try:
+                            ch_name = lookup_channel_name(st.session_state.api_key, cid)
+                            if ch_name in st.session_state.channels:
+                                # Append ID suffix if name collision
+                                ch_name = f"{ch_name} ({cid[-6:]})"
+                            st.session_state.channels[ch_name] = {
+                                "id": cid, "data": None, "channel_stats": {},
+                                "last_refreshed": "Never", "notes": "", "ideas": {}}
+                            save_channel_to_db(ch_name, cid, {}, None, "Never")
+                            st.success(f"Added: {ch_name}")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Could not find channel: {e}")
 
     if st.session_state.channels:
         for ch_name in list(st.session_state.channels.keys()):
