@@ -879,7 +879,8 @@ with T_DETAIL:
         fig2.add_trace(go.Bar(x=freq["Month"], y=freq["Videos"], name="Videos Posted", marker_color="#252525", marker_line_width=0))
         fig2.add_trace(go.Scatter(x=freq["Month"], y=freq["Avg_Views"], name="Avg Views", yaxis="y2",
                                   line=dict(color="#ff0033",width=2), marker=dict(color="#ff0033",size=5)))
-        fig2.update_layout(**PLOTLY, title="Upload Frequency vs Avg Views",
+        PLOTLY_NO_AXES = {k: v for k, v in PLOTLY.items() if k not in ("xaxis", "yaxis")}
+        fig2.update_layout(**PLOTLY_NO_AXES, title="Upload Frequency vs Avg Views",
                            yaxis2=dict(overlaying="y",side="right",gridcolor="#1e1e1e",color="#737373"),
                            legend=dict(orientation="h",y=1.1))
         st.plotly_chart(fig2, use_container_width=True)
