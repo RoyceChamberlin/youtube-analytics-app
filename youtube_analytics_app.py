@@ -327,24 +327,51 @@ def delete_channel_from_db(name):
         db.execute("DELETE FROM videos WHERE channel_name=?", (name,))
 
 def save_snapshot_to_db(channel_name, subscribers, total_views):
+    """Save snapshot to SQLite AND into channel_stats JSON (survives /tmp resets)."""
     today = datetime.now().strftime("%Y-%m-%d")
-    with get_db() as db:
-        db.execute("""INSERT INTO snapshots (channel_name,snapshot_date,subscribers,total_views)
-            VALUES (?,?,?,?) ON CONFLICT(channel_name,snapshot_date) DO UPDATE SET
-            subscribers=excluded.subscribers, total_views=excluded.total_views""",
-            (channel_name, today, subscribers, total_views))
+    # SQLite
+    try:
+        with get_db() as db:
+            db.execute("""INSERT INTO snapshots (channel_name,snapshot_date,subscribers,total_views)
+                VALUES (?,?,?,?) ON CONFLICT(channel_name,snapshot_date) DO UPDATE SET
+                subscribers=excluded.subscribers, total_views=excluded.total_views""",
+                (channel_name, today, subscribers, total_views))
+    except Exception:
+        pass
+    # Also persist inside channel_stats so it survives restarts
+    if channel_name in st.session_state.channels:
+        stats = st.session_state.channels[channel_name].get("channel_stats", {})
+        history = stats.get("snapshot_history", {})
+        history[today] = {"subscribers": subscribers, "total_views": total_views}
+        stats["snapshot_history"] = history
+        st.session_state.channels[channel_name]["channel_stats"] = stats
 
 def load_snapshots_from_db(channel_name) -> pd.DataFrame:
-    with get_db() as db:
-        rows = db.execute(
-            "SELECT snapshot_date,subscribers,total_views FROM snapshots WHERE channel_name=? ORDER BY snapshot_date",
-            (channel_name,)).fetchall()
+    """Load snapshots — merge SQLite rows with JSON history for resilience."""
+    rows = {}
+    # 1. Try SQLite
+    try:
+        with get_db() as db:
+            db_rows = db.execute(
+                "SELECT snapshot_date,subscribers,total_views FROM snapshots WHERE channel_name=? ORDER BY snapshot_date",
+                (channel_name,)).fetchall()
+        for r in db_rows:
+            date_str = str(r["snapshot_date"])[:10]
+            rows[date_str] = {"subscribers": r["subscribers"], "total_views": r["total_views"]}
+    except Exception:
+        pass
+    # 2. Merge JSON history (catches data lost from /tmp resets)
+    if channel_name in st.session_state.get("channels", {}):
+        stats = st.session_state.channels[channel_name].get("channel_stats", {})
+        for date_str, vals in stats.get("snapshot_history", {}).items():
+            if date_str not in rows:
+                rows[date_str] = vals
     if not rows:
         return pd.DataFrame()
-    df = pd.DataFrame([dict(r) for r in rows])
-    # Strip any time component, force clean date strings
-    df["snapshot_date"] = pd.to_datetime(df["snapshot_date"]).dt.normalize().dt.date
-    df["snapshot_date"] = pd.to_datetime(df["snapshot_date"])
+    records = [{"snapshot_date": d, "subscribers": v["subscribers"], "total_views": v["total_views"]}
+               for d, v in sorted(rows.items())]
+    df = pd.DataFrame(records)
+    df["snapshot_date"] = pd.to_datetime(df["snapshot_date"]).dt.normalize()
     return df
 
 # ─────────────────────────────────────────────────────────────
@@ -500,15 +527,30 @@ def get_badge(row) -> str:
         return '<span class="vbadge badge-ever">EVERGREEN</span>'
     return ""
 
-def render_video_grid(df: pd.DataFrame, max_cards: int = 12):
-    subset = df.head(max_cards)
-    cards = '<div class="video-grid">'
+def sanitize(text: str) -> str:
+    """Escape all HTML special chars so titles never break card markup."""
+    return (str(text)
+            .replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            .replace("'", "&#39;"))
+
+def render_video_grid(df: pd.DataFrame, page: int = 0, per_page: int = 15):
+    """Render a paginated 5-column video grid."""
+    total   = len(df)
+    pages   = max(1, (total + per_page - 1) // per_page)
+    start   = page * per_page
+    subset  = df.iloc[start : start + per_page]
+
+    cards = '''<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:4px">'''
     for _, row in subset.iterrows():
         badge = get_badge(row)
         thumb = (f'<img class="video-thumb" src="{row["Thumbnail"]}" alt="" loading="lazy">'
                  if row.get("Thumbnail") else '<div class="video-thumb-ph">▶</div>')
-        title = str(row["Title"]).replace('"','&quot;')[:80]
-        ch    = f'<div class="vstat" style="color:var(--red);font-weight:600">{row.get("Channel","")}</div>' if row.get("Channel") else ""
+        title = sanitize(str(row["Title"]))[:90]
+        ch    = (f'<div class="vstat" style="color:var(--red);font-weight:600">' +
+                 sanitize(str(row.get("Channel",""))) + '</div>') if row.get("Channel") else ""
         cards += f"""<div class="video-card">
             <a href="{row['URL']}" target="_blank" style="text-decoration:none">{thumb}</a>
             <div class="video-card-body">
@@ -523,6 +565,7 @@ def render_video_grid(df: pd.DataFrame, max_cards: int = 12):
             </div></div>"""
     cards += '</div>'
     st.markdown(cards, unsafe_allow_html=True)
+    return pages
 
 # ─────────────────────────────────────────────────────────────
 # INIT
@@ -705,7 +748,7 @@ with T_DASH:
     if all_rows:
         combined = pd.concat(all_rows).nlargest(12,"Views per Day")
         st.markdown('<div class="section-label">Top Videos Right Now — By Momentum</div>', unsafe_allow_html=True)
-        render_video_grid(combined, max_cards=12)
+        render_video_grid(combined, page=0, per_page=12)
 
         st.markdown("<br><br>", unsafe_allow_html=True)
         all_full = pd.concat(all_rows)
@@ -818,8 +861,32 @@ with T_DETAIL:
         view_mode = c_a.radio("View", ["Grid","Table"], horizontal=True, label_visibility="collapsed")
         sort_by   = c_b.selectbox("Sort by", ["Views","Views per Day","Like Rate %","Comment Rate %","Published"], label_visibility="collapsed")
         sorted_df = ch_df.sort_values(sort_by, ascending=(sort_by=="Published")).reset_index(drop=True)
+
+        page_key = f"vid_page_{selected}"
+        if page_key not in st.session_state:
+            st.session_state[page_key] = 0
+        # Reset page when sort changes
+        sort_key = f"vid_sort_{selected}"
+        if st.session_state.get(sort_key) != sort_by:
+            st.session_state[page_key] = 0
+            st.session_state[sort_key] = sort_by
+
         if view_mode == "Grid":
-            render_video_grid(sorted_df, max_cards=24)
+            total_pages = render_video_grid(sorted_df, page=st.session_state[page_key], per_page=15)
+            st.markdown("<br>", unsafe_allow_html=True)
+            # Pagination controls
+            pg_cols = st.columns([1,1,4,1,1])
+            if pg_cols[0].button("⟨⟨", key=f"first_{selected}", disabled=st.session_state[page_key]==0):
+                st.session_state[page_key] = 0; st.rerun()
+            if pg_cols[1].button("⟨", key=f"prev_{selected}", disabled=st.session_state[page_key]==0):
+                st.session_state[page_key] -= 1; st.rerun()
+            pg_cols[2].markdown(
+                f'<p style="text-align:center;color:var(--text-muted);font-size:12px;padding-top:8px">Page {st.session_state[page_key]+1} of {total_pages} — {len(sorted_df)} videos total</p>',
+                unsafe_allow_html=True)
+            if pg_cols[3].button("⟩", key=f"next_{selected}", disabled=st.session_state[page_key]>=total_pages-1):
+                st.session_state[page_key] += 1; st.rerun()
+            if pg_cols[4].button("⟩⟩", key=f"last_{selected}", disabled=st.session_state[page_key]>=total_pages-1):
+                st.session_state[page_key] = total_pages-1; st.rerun()
         else:
             disp = sorted_df[["Title","Published","Views","Views per Day","Like Rate %","Comment Rate %","Likes","Comments","URL"]].copy()
             disp["Published"] = disp["Published"].dt.strftime("%Y-%m-%d")
