@@ -586,37 +586,44 @@ def render_thumb_table(df, show_channel=False, height=600):
 # ─────────────────────────────────────────────────────────────
 # CHART HELPERS — single-column, no cramped side-by-side
 # ─────────────────────────────────────────────────────────────
+def _pb():
+    """PLOTLY base — strips xaxis/yaxis/margin so callers can set their own."""
+    return {k: v for k, v in PLOTLY.items() if k not in ("xaxis","yaxis","margin")}
+
 def chart_top_views(df, n=10):
-    top = df.nlargest(n,"Views")[["Title","Views"]].sort_values("Views")
-    # Truncate title for display
+    top = df.nlargest(n,"Views")[["Title","Views"]].sort_values("Views").copy()
     top["Label"] = top["Title"].str[:45]
+    colors = top["Views"].tolist()
     fig = go.Figure(go.Bar(
         x=top["Views"], y=top["Label"], orientation="h",
-        marker=dict(color=top["Views"], colorscale=[[0,"#3a0010"],[1,"#ff0033"]], showscale=False),
+        marker=dict(color=colors, colorscale=[[0,"#3a0010"],[1,"#ff0033"]], showscale=False),
         text=[fmt(v) for v in top["Views"]], textposition="outside",
         textfont=dict(size=10, color="#737373"),
     ))
-    fig.update_layout(**PLOTLY, title=f"Top {n} Videos by Total Views",
+    fig.update_layout(**_pb(), title=f"Top {n} Videos by Total Views",
                       height=max(300, n*38), showlegend=False,
-                      margin=dict(l=10,r=60,t=44,b=10))
-    fig.update_xaxes(visible=False)
-    fig.update_yaxes(tickfont=dict(size=10), automargin=True)
+                      margin=dict(l=10,r=70,t=44,b=10),
+                      xaxis=dict(visible=False, gridcolor="#1e1e1e"),
+                      yaxis=dict(tickfont=dict(size=10), automargin=True,
+                                 gridcolor="#1e1e1e", linecolor="#252525"))
     return fig
 
 def chart_top_momentum(df, n=10):
-    top = df.nlargest(n,"Views per Day")[["Title","Views per Day"]].sort_values("Views per Day")
+    top = df.nlargest(n,"Views per Day")[["Title","Views per Day"]].sort_values("Views per Day").copy()
     top["Label"] = top["Title"].str[:45]
+    colors = top["Views per Day"].tolist()
     fig = go.Figure(go.Bar(
         x=top["Views per Day"], y=top["Label"], orientation="h",
-        marker=dict(color=top["Views per Day"], colorscale=[[0,"#001a33"],[1,"#1e8fff"]], showscale=False),
+        marker=dict(color=colors, colorscale=[[0,"#001a33"],[1,"#1e8fff"]], showscale=False),
         text=[f'{v:.0f}' for v in top["Views per Day"]], textposition="outside",
         textfont=dict(size=10, color="#737373"),
     ))
-    fig.update_layout(**PLOTLY, title=f"Top {n} Videos by Momentum (Views/Day)",
+    fig.update_layout(**_pb(), title=f"Top {n} Videos by Momentum (Views/Day)",
                       height=max(300, n*38), showlegend=False,
-                      margin=dict(l=10,r=60,t=44,b=10))
-    fig.update_xaxes(visible=False)
-    fig.update_yaxes(tickfont=dict(size=10), automargin=True)
+                      margin=dict(l=10,r=70,t=44,b=10),
+                      xaxis=dict(visible=False, gridcolor="#1e1e1e"),
+                      yaxis=dict(tickfont=dict(size=10), automargin=True,
+                                 gridcolor="#1e1e1e", linecolor="#252525"))
     return fig
 
 # ─────────────────────────────────────────────────────────────
