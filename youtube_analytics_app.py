@@ -273,9 +273,17 @@ hr { border-color: var(--border) !important; margin: 16px 0 !important; }
 
 .stTextArea textarea { font-family: var(--font-mono) !important; font-size: 12px !important; line-height: 1.7 !important; }
 
-#MainMenu, footer, header { visibility: hidden; }
-.stDeployButton { display: none; }
-[data-testid="stToolbar"] { display: none; }
+#MainMenu, footer, header { visibility: hidden !important; height: 0 !important; }
+.stDeployButton { display: none !important; }
+[data-testid="stToolbar"] { display: none !important; }
+[data-testid="stStatusWidget"] { display: none !important; }
+[data-testid="stDecoration"] { display: none !important; }
+iframe[title="st_navbar"] { display: none !important; }
+.viewerBadge_container__1QSob { display: none !important; }
+.stActionButton { display: none !important; }
+/* Hide "Made with Streamlit" footer and running indicator */
+.reportview-container .main footer { display: none !important; }
+section[data-testid="stSidebarUserContent"] ~ div > div:last-child { display: none !important; }
 
 /* ── Force sidebar visible on desktop ── */
 @media (min-width: 769px) {
@@ -753,44 +761,65 @@ def get_badge(row) -> str:
     return ""
 
 def sanitize(text: str) -> str:
-    """Escape all HTML special chars so titles never break card markup."""
-    return (str(text)
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace('"', "&quot;")
-            .replace("'", "&#39;"))
+    """Escape HTML special chars. Emojis are kept but encoded safely."""
+    import html
+    return html.escape(str(text), quote=True)
 
 def render_video_grid(df: pd.DataFrame, page: int = 0, per_page: int = 15):
-    """Render a paginated 5-column video grid."""
-    total   = len(df)
-    pages   = max(1, (total + per_page - 1) // per_page)
-    start   = page * per_page
-    subset  = df.iloc[start : start + per_page]
+    """Legacy grid — kept for compatibility but table is preferred."""
+    return render_thumb_table(df.iloc[page*per_page:(page+1)*per_page].reset_index(drop=True))
 
-    cards = '''<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:4px">'''
-    for _, row in subset.iterrows():
+def render_thumb_table(df: pd.DataFrame, show_channel: bool = False):
+    """Render a clean thumbnail table — used in both dashboard and channel detail."""
+    import html as _html
+    TH = "padding:10px 12px;text-align:{align};font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border);background:var(--bg-3)"
+    TD = "padding:10px 12px;border-bottom:1px solid var(--border)"
+
+    rows_html = ""
+    for _, row in df.iterrows():
         badge = get_badge(row)
-        thumb = (f'<img class="video-thumb" src="{row["Thumbnail"]}" alt="" loading="lazy">'
-                 if row.get("Thumbnail") else '<div class="video-thumb-ph">▶</div>')
-        title = sanitize(str(row["Title"]))[:90]
-        ch    = (f'<div class="vstat" style="color:var(--red);font-weight:600">' +
-                 sanitize(str(row.get("Channel",""))) + '</div>') if row.get("Channel") else ""
-        cards += f"""<div class="video-card">
-            <a href="{row['URL']}" target="_blank" style="text-decoration:none">{thumb}</a>
-            <div class="video-card-body">
-                {ch}{badge}
-                <div class="video-card-title">{title}</div>
-                <div class="video-card-meta">
-                    <div class="vstat"><span>{fmt(row['Views'])}</span> views</div>
-                    <div class="vstat"><span>{row['Views per Day']:.0f}</span>/day</div>
-                    <div class="vstat"><span>{row['Like Rate %']:.1f}%</span> liked</div>
-                </div>
-                <a href="{row['URL']}" target="_blank" class="video-card-link">Watch ↗</a>
-            </div></div>"""
-    cards += '</div>'
-    st.markdown(cards, unsafe_allow_html=True)
-    return pages
+        thumb = (f'<img src="{_html.escape(str(row["Thumbnail"]))}" style="width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;border-radius:5px;display:block;min-width:72px" loading="lazy">'
+                 if row.get("Thumbnail")
+                 else '<div style="width:100%;aspect-ratio:16/9;min-width:72px;background:var(--bg-4);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:16px">▶</div>')
+        title = sanitize(str(row.get("Title", "")))
+        pub   = row["Published"].strftime("%Y-%m-%d") if pd.notna(row.get("Published")) else "—"
+        ch_tag = (f'<div style="font-size:10px;color:var(--red);font-weight:600;margin-bottom:3px">{sanitize(str(row.get("Channel","")))}</div>'
+                  if show_channel and row.get("Channel") else "")
+        vpd   = f'{row["Views per Day"]:.1f}' if "Views per Day" in row else "—"
+        lr    = f'{row["Like Rate %"]:.2f}%' if "Like Rate %" in row else "—"
+        cr    = f'{row["Comment Rate %"]:.2f}%' if "Comment Rate %" in row else "—"
+        rows_html += f"""<tr onmouseover="this.style.background='#181818'" onmouseout="this.style.background=''">
+            <td class="vid-thumb-cell" style="{TD};width:130px;min-width:72px;max-width:130px">
+                <a href="{_html.escape(str(row.get('URL','#')))}" target="_blank" style="text-decoration:none">{thumb}</a>
+            </td>
+            <td style="{TD};min-width:160px">
+                {ch_tag}
+                <div style="font-size:13px;font-weight:600;color:#e8e8e8;line-height:1.4;margin-bottom:3px">{title}</div>
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">{pub}</div>
+                {badge}
+                <div style="margin-top:6px"><a href="{_html.escape(str(row.get('URL','#')))}" target="_blank" style="color:var(--red);font-size:11px;font-weight:600;text-decoration:none">Watch ↗</a></div>
+            </td>
+            <td style="{TD};text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{fmt(row.get("Views",0))}</td>
+            <td class="vid-col-hide" style="{TD};text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{vpd}</td>
+            <td class="vid-col-hide" style="{TD};text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{lr}</td>
+            <td class="vid-col-hide" style="{TD};text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{cr}</td>
+        </tr>"""
+
+    table_html = f"""
+    <div class="vid-table-wrap" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px">
+        <table style="width:100%;border-collapse:collapse;font-family:var(--font)">
+            <thead><tr>
+                <th style="{TH.format(align='left')}">Thumb</th>
+                <th style="{TH.format(align='left')}">Title</th>
+                <th style="{TH.format(align='right')}">Views</th>
+                <th class="vid-col-hide" style="{TH.format(align='right')}">Views/Day</th>
+                <th class="vid-col-hide" style="{TH.format(align='right')}">Like Rate</th>
+                <th class="vid-col-hide" style="{TH.format(align='right')}">Comment Rate</th>
+            </tr></thead>
+            <tbody>{rows_html}</tbody>
+        </table>
+    </div>"""
+    st.markdown(table_html, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────
 # INIT
@@ -1074,9 +1103,9 @@ with T_DASH:
             all_rows.append(top)
 
     if all_rows:
-        combined = pd.concat(all_rows).nlargest(12,"Views per Day")
+        combined = pd.concat(all_rows).nlargest(12,"Views per Day").reset_index(drop=True)
         st.markdown('<div class="section-label">Top Videos Right Now — By Momentum</div>', unsafe_allow_html=True)
-        render_video_grid(combined, page=0, per_page=12)
+        render_thumb_table(combined, show_channel=True)
 
         st.markdown("<br><br>", unsafe_allow_html=True)
         all_full = pd.concat(all_rows)
@@ -1226,49 +1255,7 @@ with T_DETAIL:
         page = st.session_state[page_key]
         page_df = sorted_df.iloc[page * per_page:(page + 1) * per_page].reset_index(drop=True)
 
-        # Build HTML table with thumbnails — mobile-friendly
-        TH = "padding:10px 12px;text-align:{align};font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border)"
-        TD = "padding:10px 12px;border-bottom:1px solid var(--border)"
-
-        rows_html = ""
-        for _, row in page_df.iterrows():
-            badge = get_badge(row)
-            thumb = (f'<img src="{row["Thumbnail"]}" style="width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;border-radius:5px;display:block;min-width:72px">' 
-                     if row.get("Thumbnail") 
-                     else '<div style="width:100%;aspect-ratio:16/9;min-width:72px;background:var(--bg-4);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:16px">▶</div>')
-            title = sanitize(str(row["Title"]))
-            pub   = row["Published"].strftime("%Y-%m-%d") if pd.notna(row["Published"]) else "—"
-            rows_html += f"""<tr style="transition:background 0.1s" onmouseover="this.style.background='#181818'" onmouseout="this.style.background=''">
-                <td class="vid-thumb-cell" style="{TD};width:130px;min-width:72px;max-width:130px">
-                    <a href="{row['URL']}" target="_blank" style="text-decoration:none">{thumb}</a>
-                </td>
-                <td style="{TD};min-width:160px">
-                    <div style="font-size:13px;font-weight:600;color:#e8e8e8;line-height:1.4;margin-bottom:3px">{title}</div>
-                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">{pub}</div>
-                    {badge}
-                    <div style="margin-top:6px"><a href="{row['URL']}" target="_blank" style="color:var(--red);font-size:11px;font-weight:600;text-decoration:none">Watch ↗</a></div>
-                </td>
-                <td style="{TD};text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{fmt(row["Views"])}</td>
-                <td class="vid-col-hide" style="{TD};text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{row["Views per Day"]:.1f}</td>
-                <td class="vid-col-hide" style="{TD};text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{row["Like Rate %"]:.2f}%</td>
-                <td class="vid-col-hide" style="{TD};text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{row["Comment Rate %"]:.2f}%</td>
-            </tr>"""
-
-        table_html = f"""
-        <div class="vid-table-wrap" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px">
-            <table style="width:100%;border-collapse:collapse;font-family:var(--font)">
-                <thead><tr style="background:var(--bg-3)">
-                    <th style="{TH.format(align='left')}">Thumb</th>
-                    <th style="{TH.format(align='left')}">Title</th>
-                    <th style="{TH.format(align='right')}">Views</th>
-                    <th class="vid-col-hide" style="{TH.format(align='right')}">Views/Day</th>
-                    <th class="vid-col-hide" style="{TH.format(align='right')}">Like Rate</th>
-                    <th class="vid-col-hide" style="{TH.format(align='right')}">Comment Rate</th>
-                </tr></thead>
-                <tbody>{rows_html}</tbody>
-            </table>
-        </div>"""
-        st.markdown(table_html, unsafe_allow_html=True)
+        render_thumb_table(page_df)
 
         # Pagination
         pg_cols = st.columns([1,1,4,1,1])
