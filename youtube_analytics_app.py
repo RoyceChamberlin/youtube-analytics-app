@@ -286,30 +286,42 @@ iframe[title="st_navbar"] { display: none !important; }
 .reportview-container .main footer { display: none !important; }
 section[data-testid="stSidebarUserContent"] ~ div > div:last-child { display: none !important; }
 
-/* ── Force sidebar visible on desktop ── */
-@media (min-width: 769px) {
-    [data-testid="stSidebar"] {
-        display: flex !important;
-        visibility: visible !important;
-        width: 280px !important;
-        min-width: 280px !important;
-        transform: none !important;
-    }
-    /* Keep collapse button visible so user can hide if they want */
-    [data-testid="collapsedControl"] { display: flex !important; }
-    button[kind="header"] { display: flex !important; }
-}
-
-/* ── Sidebar toggle button — always visible ── */
+/* ── Sidebar toggle — always visible on both mobile and desktop ── */
 [data-testid="collapsedControl"] {
     display: flex !important;
-    background: var(--bg-3) !important;
-    border: 1px solid var(--border-2) !important;
-    border-radius: 0 8px 8px 0 !important;
-    color: var(--text-muted) !important;
-    width: 20px !important;
-    top: 50% !important;
-    z-index: 999 !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: fixed !important;
+    top: 14px !important;
+    left: 14px !important;
+    z-index: 9999 !important;
+    background: #1a1a1a !important;
+    border: 1px solid #2e2e2e !important;
+    border-radius: 8px !important;
+    width: 36px !important;
+    height: 36px !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.5) !important;
+    transition: background 0.15s !important;
+}
+[data-testid="collapsedControl"]:hover {
+    background: #252525 !important;
+}
+[data-testid="collapsedControl"] svg {
+    color: #e8e8e8 !important;
+    width: 16px !important;
+    height: 16px !important;
+}
+/* On mobile — sidebar overlays, doesn't push content */
+@media (max-width: 768px) {
+    [data-testid="stSidebar"] {
+        position: fixed !important;
+        z-index: 9998 !important;
+        height: 100vh !important;
+        box-shadow: 4px 0 24px rgba(0,0,0,0.6) !important;
+    }
 }
 
 /* ── Smaller refresh button in channel detail ── */
@@ -1048,7 +1060,7 @@ else:
 # ─────────────────────────────────────────────────────────────
 # MAIN TABS
 # ─────────────────────────────────────────────────────────────
-T_DASH, T_ALL, T_DETAIL = st.tabs(["  Dashboard  ","  All Channels  ","  Channel Detail  "])
+T_DASH, T_ALL, T_DETAIL, T_AI = st.tabs(["  Dashboard  ","  All Channels  ","  Channel Detail  ","  ✦ AI Ideas  "])
 
 # ═══════════════════════════════════════════
 # DASHBOARD
@@ -1250,7 +1262,7 @@ with T_DETAIL:
         </div>
     </div>''', unsafe_allow_html=True)
 
-    DT1,DT2,DT3,DT4,DT5,DT6 = st.tabs(["  Videos  ","  Charts  ","  Upload Timing  ","  Content Series  ","  AI Ideas  ","  Notes  "])
+    DT1,DT2,DT3,DT4,DT5 = st.tabs(["  Videos  ","  Charts  ","  Upload Timing  ","  Content Series  ","  Notes  "])
 
     # ── VIDEOS ──
     with DT1:
@@ -1413,155 +1425,8 @@ with T_DETAIL:
             st.plotly_chart(fig, use_container_width=True)
             st.dataframe(phr_df, use_container_width=True, hide_index=True)
 
-    # ── AI IDEAS ──
-    with DT5:
-        # Animated gradient background page
-        components.html("""<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-        *{margin:0;padding:0;box-sizing:border-box}
-        body{background:transparent;font-family:'Instrument Sans',system-ui,sans-serif}
-        .bg{
-            position:fixed;inset:0;z-index:0;
-            background:linear-gradient(135deg,#0a0a0a 0%,#1a0008 25%,#0a0a14 50%,#001a0a 75%,#0a0a0a 100%);
-            background-size:400% 400%;
-            animation:gradShift 12s ease infinite;
-        }
-        @keyframes gradShift{
-            0%{background-position:0% 50%}
-            50%{background-position:100% 50%}
-            100%{background-position:0% 50%}
-        }
-        </style></head><body><div class="bg"></div></body></html>""", height=0)
-
-        # Header
-        st.markdown("""
-        <div style="text-align:center;padding:32px 20px 24px;position:relative">
-            <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(255,0,51,0.08);border:1px solid rgba(255,0,51,0.2);border-radius:20px;padding:5px 14px;margin-bottom:16px">
-                <div style="width:6px;height:6px;border-radius:50%;background:#ff0033;animation:pulse 2s infinite"></div>
-                <span style="font-family:monospace;font-size:10px;font-weight:700;color:#ff0033;letter-spacing:1.5px;text-transform:uppercase">Claude AI</span>
-            </div>
-            <h2 style="font-size:26px;font-weight:700;color:#fff;letter-spacing:-0.5px;margin-bottom:8px">Strategic Video Ideas</h2>
-            <p style="color:#737373;font-size:13px;max-width:480px;margin:0 auto;line-height:1.6">
-                Select a channel, hit generate, and Claude will analyze your top-performing content to suggest data-driven video ideas.
-            </p>
-        </div>
-        <style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}</style>
-        """, unsafe_allow_html=True)
-
-        if not st.session_state.anthropic_key:
-            st.markdown('<div class="alert alert-warn" style="max-width:520px;margin:0 auto"><div class="alert-icon">⚠️</div><div class="alert-body"><div class="alert-title">Anthropic API key required</div><div class="alert-desc">Add your key under API Keys in the sidebar.</div></div></div>', unsafe_allow_html=True)
-        else:
-            # Channel picker + generate button
-            ai_cols = st.columns([3,2])
-            with ai_cols[0]:
-                ai_channel = st.selectbox(
-                    "Channel to analyze",
-                    list(st.session_state.channels.keys()),
-                    index=list(st.session_state.channels.keys()).index(selected) if selected in st.session_state.channels else 0,
-                    key="ai_ch_pick"
-                )
-            with ai_cols[1]:
-                st.markdown("<br>", unsafe_allow_html=True)
-                generate_clicked = st.button("✦  Generate Ideas", type="primary", use_container_width=True)
-
-            if generate_clicked:
-                ai_info = st.session_state.channels.get(ai_channel, {})
-                ai_df   = ai_info.get("data")
-                if ai_df is None or ai_df.empty:
-                    st.error("Refresh that channel first to load video data.")
-                else:
-                    with st.spinner("Claude is analyzing your channel..."):
-                        try:
-                            result = generate_ai_ideas(
-                                st.session_state.anthropic_key, ai_channel, ai_df,
-                                ai_info.get("channel_stats",{}).get("description",""))
-                            st.session_state.ideas_cache[ai_channel] = result
-                            st.session_state.channels[ai_channel]["ideas"] = {"ai_text": result}
-                            ai_stats = ai_info.get("channel_stats",{})
-                            save_channel_to_db(ai_channel, ai_info["id"], ai_stats, ai_df,
-                                               ai_info.get("last_refreshed",""),
-                                               ai_info.get("notes",""), {"ai_text": result})
-                        except Exception as e:
-                            st.error(f"Claude API error: {e}")
-
-            # Display response
-            cached = (st.session_state.ideas_cache.get(ai_channel if 'ai_channel' in dir() else selected) or
-                      st.session_state.channels.get(ai_channel if 'ai_channel' in dir() else selected, {}).get("ideas",{}).get("ai_text",""))
-
-            if cached:
-                # Format the markdown response in a styled chat bubble
-                import re as _re
-                # Convert **bold** to styled spans
-                formatted = _re.sub(r'\*\*(.+?)\*\*', r'<strong style="color:#fff"></strong>', cached)
-                # Number list items get cards
-                lines = formatted.split("\n")
-                output_html = ""
-                for line in lines:
-                    line = line.strip()
-                    if not line:
-                        output_html += '<div style="height:8px"></div>'
-                    elif _re.match(r'^\d+\.', line):
-                        output_html += f'<div style="background:rgba(255,255,255,0.03);border:1px solid #252525;border-left:3px solid #ff0033;border-radius:6px;padding:12px 14px;margin-bottom:8px;font-size:13px;line-height:1.7;color:#c8c8c8">{line}</div>'
-                    elif line.startswith("#"):
-                        clean = line.lstrip("# ")
-                        output_html += f'<div style="font-size:14px;font-weight:700;color:#fff;margin:16px 0 6px">{clean}</div>'
-                    elif line.startswith("-") or line.startswith("•"):
-                        output_html += f'<div style="font-size:13px;color:#c8c8c8;line-height:1.7;padding-left:12px;margin-bottom:4px">◦ {line[1:].strip()}</div>'
-                    else:
-                        output_html += f'<div style="font-size:13px;color:#c8c8c8;line-height:1.8;margin-bottom:4px">{line}</div>'
-
-                components.html(f"""<!DOCTYPE html><html><head><meta charset="utf-8">
-                <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-                <style>
-                  *{{box-sizing:border-box;margin:0;padding:0}}
-                  body{{
-                    background:linear-gradient(160deg,#0f0008 0%,#0a0a0a 40%,#00080f 100%);
-                    font-family:'Instrument Sans',system-ui,sans-serif;
-                    padding:24px;color:#c8c8c8;
-                    animation:bgShift 15s ease infinite;
-                    background-size:300% 300%;
-                  }}
-                  @keyframes bgShift{{
-                    0%{{background-position:0% 50%}}
-                    50%{{background-position:100% 50%}}
-                    100%{{background-position:0% 50%}}
-                  }}
-                  .header{{display:flex;align-items:center;gap:10px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #1e1e1e}}
-                  .dot{{width:8px;height:8px;border-radius:50%;background:#ff0033;animation:pulse 2s infinite;flex-shrink:0}}
-                  @keyframes pulse{{0%,100%{{opacity:1}}50%{{opacity:0.3}}}}
-                  .label{{font-family:monospace;font-size:10px;font-weight:700;color:#ff0033;letter-spacing:1.5px;text-transform:uppercase}}
-                  .ch-name{{font-size:13px;color:#737373;margin-left:auto}}
-                  strong{{color:#fff}}
-                  ::-webkit-scrollbar{{width:4px}}
-                  ::-webkit-scrollbar-track{{background:#0a0a0a}}
-                  ::-webkit-scrollbar-thumb{{background:#2a2a2a;border-radius:2px}}
-                </style></head><body>
-                <div class="header">
-                  <div class="dot"></div>
-                  <div class="label">Claude Analysis</div>
-                  <div class="ch-name">{ai_channel if 'ai_channel' in dir() else selected}</div>
-                </div>
-                {output_html}
-                </body></html>""", height=600, scrolling=True)
-
-                # Regenerate button below
-                st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("↺  Regenerate Ideas", key="regen_ideas"):
-                    ai_info2 = st.session_state.channels.get(ai_channel if 'ai_channel' in dir() else selected, {})
-                    ai_df2   = ai_info2.get("data")
-                    if ai_df2 is not None and not ai_df2.empty:
-                        with st.spinner("Regenerating..."):
-                            try:
-                                ch_key = ai_channel if 'ai_channel' in dir() else selected
-                                result2 = generate_ai_ideas(
-                                    st.session_state.anthropic_key, ch_key, ai_df2,
-                                    ai_info2.get("channel_stats",{}).get("description",""))
-                                st.session_state.ideas_cache[ch_key] = result2
-                                st.rerun()
-                            except Exception as e:
-                                st.error(str(e))
-
     # ── NOTES ──
-    with DT6:
+    with DT5:
         st.markdown('<div class="section-label">Team Notes</div>', unsafe_allow_html=True)
         new_notes = st.text_area("Notes", value=info.get("notes",""), height=220,
                                  placeholder="Observations, strategy, action items...",
@@ -1573,6 +1438,145 @@ with T_DETAIL:
             st.success("Saved.")
 
 # ═══════════════════════════════════════════
+
+# ═══════════════════════════════════════════
+# AI IDEAS — TOP LEVEL TAB
+# ═══════════════════════════════════════════
+with T_AI:
+    # Animated gradient header via iframe
+    components.html("""<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{
+        background:linear-gradient(135deg,#0f0008 0%,#0a0a0a 30%,#00080f 65%,#0f0008 100%);
+        background-size:300% 300%;
+        animation:grad 12s ease infinite;
+        padding:40px 24px 32px;
+        font-family:'Instrument Sans',system-ui,sans-serif;
+        text-align:center;
+    }
+    @keyframes grad{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
+    .badge{display:inline-flex;align-items:center;gap:7px;background:rgba(255,0,51,0.1);border:1px solid rgba(255,0,51,0.25);border-radius:20px;padding:5px 14px;margin-bottom:18px}
+    .dot{width:7px;height:7px;border-radius:50%;background:#ff0033;animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+    .badge-text{font-family:monospace;font-size:10px;font-weight:700;color:#ff0033;letter-spacing:1.5px;text-transform:uppercase}
+    h1{font-size:28px;font-weight:700;color:#fff;letter-spacing:-0.5px;margin-bottom:10px}
+    p{color:#737373;font-size:13px;max-width:480px;margin:0 auto;line-height:1.7}
+    </style></head><body>
+    <div class="badge"><div class="dot"></div><span class="badge-text">Claude AI</span></div>
+    <h1>Strategic Video Ideas</h1>
+    <p>Select a channel and Claude will analyze your top-performing content to generate data-driven video ideas tailored to your audience.</p>
+    </body></html>""", height=220)
+
+    if not st.session_state.anthropic_key:
+        st.markdown('<div class="alert alert-warn" style="max-width:520px;margin:0 auto"><div class="alert-icon">⚠️</div><div class="alert-body"><div class="alert-title">Anthropic API key required</div><div class="alert-desc">Add your key under API Keys in the sidebar.</div></div></div>', unsafe_allow_html=True)
+    else:
+        channels_with_data = {k: v for k, v in st.session_state.channels.items() if v.get("data") is not None}
+        if not channels_with_data:
+            st.markdown('<div class="alert alert-info"><div class="alert-icon">📡</div><div class="alert-body"><div class="alert-title">No channel data loaded</div><div class="alert-desc">Refresh at least one channel first, then come back here.</div></div></div>', unsafe_allow_html=True)
+        else:
+            ai_c1, ai_c2 = st.columns([3, 2])
+            with ai_c1:
+                ai_channel = st.selectbox(
+                    "Choose a channel to analyze",
+                    list(channels_with_data.keys()),
+                    key="ai_top_ch"
+                )
+            with ai_c2:
+                st.markdown("<br>", unsafe_allow_html=True)
+                generate_clicked = st.button("✦  Generate Ideas", type="primary", use_container_width=True, key="ai_top_gen")
+
+            if generate_clicked:
+                ai_info = st.session_state.channels[ai_channel]
+                ai_df   = ai_info["data"]
+                with st.spinner("Claude is analyzing your channel..."):
+                    try:
+                        result = generate_ai_ideas(
+                            st.session_state.anthropic_key, ai_channel, ai_df,
+                            ai_info.get("channel_stats", {}).get("description", ""))
+                        st.session_state.ideas_cache[ai_channel] = result
+                        st.session_state.channels[ai_channel]["ideas"] = {"ai_text": result}
+                        save_channel_to_db(ai_channel, ai_info["id"],
+                                           ai_info.get("channel_stats", {}), ai_df,
+                                           ai_info.get("last_refreshed", ""),
+                                           ai_info.get("notes", ""), {"ai_text": result})
+                    except Exception as e:
+                        st.error(f"Claude API error: {e}")
+
+            # Show cached result for selected channel
+            cached = (st.session_state.ideas_cache.get(ai_channel, "") or
+                      st.session_state.channels.get(ai_channel, {}).get("ideas", {}).get("ai_text", ""))
+
+            if cached:
+                import re as _re, html as _hesc
+                safe = _hesc.escape(cached)
+                # Unescape the bold markers we want to render
+                safe = _re.sub(r'&lt;strong[^&]*&gt;(.*?)&lt;/strong&gt;', r'<strong style="color:#fff">\1</strong>', safe)
+                lines = safe.split("\n")
+                output_html = ""
+                for line in lines:
+                    line = line.strip()
+                    if not line:
+                        output_html += '<div style="height:6px"></div>'
+                    elif _re.match(r'^\d+\.', line):
+                        output_html += f'<div style="background:rgba(255,255,255,0.02);border:1px solid #252525;border-left:3px solid #ff0033;border-radius:6px;padding:12px 16px;margin-bottom:10px;font-size:13px;line-height:1.75;color:#c8c8c8">{line}</div>'
+                    elif line.startswith("**") and line.endswith("**"):
+                        output_html += f'<div style="font-size:14px;font-weight:700;color:#fff;margin:18px 0 8px;padding-bottom:6px;border-bottom:1px solid #1e1e1e">{line.strip("*")}</div>'
+                    elif line.startswith("#"):
+                        output_html += f'<div style="font-size:15px;font-weight:700;color:#fff;margin:20px 0 8px">{line.lstrip("# ")}</div>'
+                    elif line.startswith("-") or line.startswith("•"):
+                        output_html += f'<div style="font-size:13px;color:#aaa;line-height:1.75;padding-left:14px;margin-bottom:5px;position:relative"><span style="position:absolute;left:0;color:#ff0033">›</span>{line[1:].strip()}</div>'
+                    else:
+                        output_html += f'<div style="font-size:13px;color:#c8c8c8;line-height:1.8;margin-bottom:4px">{line}</div>'
+
+                components.html(f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+                <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+                <style>
+                  *{{box-sizing:border-box;margin:0;padding:0}}
+                  body{{
+                    font-family:'Instrument Sans',system-ui,sans-serif;
+                    padding:24px 28px;
+                    background:linear-gradient(160deg,#0f0008 0%,#0a0a0a 45%,#00080f 100%);
+                    background-size:300% 300%;
+                    animation:bgShift 18s ease infinite;
+                    min-height:100%;
+                  }}
+                  @keyframes bgShift{{0%{{background-position:0% 50%}}50%{{background-position:100% 50%}}100%{{background-position:0% 50%}}}}
+                  .hdr{{display:flex;align-items:center;gap:10px;margin-bottom:22px;padding-bottom:14px;border-bottom:1px solid #1e1e1e}}
+                  .dot{{width:8px;height:8px;border-radius:50%;background:#ff0033;animation:pulse 2s infinite;flex-shrink:0}}
+                  @keyframes pulse{{0%,100%{{opacity:1}}50%{{opacity:0.3}}}}
+                  .lbl{{font-family:monospace;font-size:10px;font-weight:700;color:#ff0033;letter-spacing:1.5px;text-transform:uppercase}}
+                  .chn{{font-size:12px;color:#555;margin-left:auto;font-weight:500}}
+                  strong{{color:#fff;font-weight:700}}
+                  ::-webkit-scrollbar{{width:4px}}
+                  ::-webkit-scrollbar-track{{background:#0a0a0a}}
+                  ::-webkit-scrollbar-thumb{{background:#2a2a2a;border-radius:2px}}
+                </style></head><body>
+                <div class="hdr">
+                  <div class="dot"></div>
+                  <div class="lbl">Claude Analysis</div>
+                  <div class="chn">{_hesc.escape(str(ai_channel))}</div>
+                </div>
+                {output_html}
+                </body></html>""", height=620, scrolling=True)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                rc1, rc2, _ = st.columns([2, 2, 4])
+                if rc1.button("↺  Regenerate", key="ai_regen", use_container_width=True):
+                    ai_info2 = st.session_state.channels.get(ai_channel, {})
+                    ai_df2   = ai_info2.get("data")
+                    if ai_df2 is not None and not ai_df2.empty:
+                        with st.spinner("Regenerating..."):
+                            try:
+                                r2 = generate_ai_ideas(
+                                    st.session_state.anthropic_key, ai_channel, ai_df2,
+                                    ai_info2.get("channel_stats", {}).get("description", ""))
+                                st.session_state.ideas_cache[ai_channel] = r2
+                                st.rerun()
+                            except Exception as e:
+                                st.error(str(e))
+                if rc2.button("🗑  Clear", key="ai_clear", use_container_width=True):
+                    st.session_state.ideas_cache.pop(ai_channel, None)
+                    st.rerun()
 
 # ─────────────────────────────────────────────────────────────
 # FOOTER
