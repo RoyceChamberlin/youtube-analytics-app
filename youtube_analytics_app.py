@@ -1036,40 +1036,84 @@ with T_DETAIL:
 
     # ── VIDEOS ──
     with DT1:
-        c_a, c_b = st.columns([2,4])
-        view_mode = c_a.radio("View", ["Grid","Table"], horizontal=True, label_visibility="collapsed")
-        sort_by   = c_b.selectbox("Sort by", ["Views","Views per Day","Like Rate %","Comment Rate %","Published"], label_visibility="collapsed")
+        sort_by = st.selectbox("Sort by", ["Views","Views per Day","Like Rate %","Comment Rate %","Published"],
+                               label_visibility="collapsed")
         sorted_df = ch_df.sort_values(sort_by, ascending=(sort_by=="Published")).reset_index(drop=True)
 
         page_key = f"vid_page_{selected}"
         if page_key not in st.session_state:
             st.session_state[page_key] = 0
-        # Reset page when sort changes
         sort_key = f"vid_sort_{selected}"
         if st.session_state.get(sort_key) != sort_by:
             st.session_state[page_key] = 0
             st.session_state[sort_key] = sort_by
 
-        if view_mode == "Grid":
-            total_pages = render_video_grid(sorted_df, page=st.session_state[page_key], per_page=15)
-            st.markdown("<br>", unsafe_allow_html=True)
-            # Pagination controls
-            pg_cols = st.columns([1,1,4,1,1])
-            if pg_cols[0].button("⟨⟨", key=f"first_{selected}", disabled=st.session_state[page_key]==0):
-                st.session_state[page_key] = 0; st.rerun()
-            if pg_cols[1].button("⟨", key=f"prev_{selected}", disabled=st.session_state[page_key]==0):
-                st.session_state[page_key] -= 1; st.rerun()
-            pg_cols[2].markdown(
-                f'<p style="text-align:center;color:var(--text-muted);font-size:12px;padding-top:8px">Page {st.session_state[page_key]+1} of {total_pages} — {len(sorted_df)} videos total</p>',
-                unsafe_allow_html=True)
-            if pg_cols[3].button("⟩", key=f"next_{selected}", disabled=st.session_state[page_key]>=total_pages-1):
-                st.session_state[page_key] += 1; st.rerun()
-            if pg_cols[4].button("⟩⟩", key=f"last_{selected}", disabled=st.session_state[page_key]>=total_pages-1):
-                st.session_state[page_key] = total_pages-1; st.rerun()
-        else:
-            disp = sorted_df[["Title","Published","Views","Views per Day","Like Rate %","Comment Rate %","Likes","Comments","URL"]].copy()
-            disp["Published"] = disp["Published"].dt.strftime("%Y-%m-%d")
-            st.dataframe(disp, use_container_width=True, hide_index=True)
+        per_page = 20
+        total_pages = max(1, (len(sorted_df) + per_page - 1) // per_page)
+        page = st.session_state[page_key]
+        page_df = sorted_df.iloc[page * per_page:(page + 1) * per_page].reset_index(drop=True)
+
+        # Build HTML table with thumbnails
+        rows_html = ""
+        for _, row in page_df.iterrows():
+            badge = get_badge(row)
+            thumb = (f'<img src="{row["Thumbnail"]}" style="width:120px;height:68px;object-fit:cover;border-radius:6px;display:block">' 
+                     if row.get("Thumbnail") 
+                     else '<div style="width:120px;height:68px;background:var(--bg-4);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:20px">▶</div>')
+            title  = sanitize(str(row["Title"]))
+            pub    = row["Published"].strftime("%Y-%m-%d") if pd.notna(row["Published"]) else "—"
+            rows_html += f"""
+            <tr>
+                <td style="padding:10px 12px;border-bottom:1px solid var(--border);width:136px">
+                    <a href="{row['URL']}" target="_blank" style="text-decoration:none">{thumb}</a>
+                </td>
+                <td style="padding:10px 14px;border-bottom:1px solid var(--border);max-width:420px">
+                    <div style="font-size:13px;font-weight:600;color:#e8e8e8;line-height:1.4;margin-bottom:4px">{title}</div>
+                    <div style="font-size:11px;color:var(--text-muted)">{pub}</div>
+                    <div style="margin-top:4px">{badge}</div>
+                </td>
+                <td style="padding:10px 14px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{fmt(row["Views"])}</td>
+                <td style="padding:10px 14px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{row["Views per Day"]:.1f}</td>
+                <td style="padding:10px 14px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{row["Like Rate %"]:.2f}%</td>
+                <td style="padding:10px 14px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{row["Comment Rate %"]:.2f}%</td>
+                <td style="padding:10px 14px;border-bottom:1px solid var(--border);text-align:center">
+                    <a href="{row['URL']}" target="_blank" style="color:var(--red);font-size:11px;font-weight:600;text-decoration:none">Watch ↗</a>
+                </td>
+            </tr>"""
+
+        table_html = f"""
+        <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px">
+            <table style="width:100%;border-collapse:collapse;font-family:var(--font)">
+                <thead>
+                    <tr style="background:var(--bg-3)">
+                        <th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border)">Thumbnail</th>
+                        <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border)">Title</th>
+                        <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border)">Views</th>
+                        <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border)">Views/Day</th>
+                        <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border)">Like Rate</th>
+                        <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border)">Comment Rate</th>
+                        <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border)">Link</th>
+                    </tr>
+                </thead>
+                <tbody>{rows_html}</tbody>
+            </table>
+        </div>"""
+        st.markdown(table_html, unsafe_allow_html=True)
+
+        # Pagination
+        pg_cols = st.columns([1,1,4,1,1])
+        if pg_cols[0].button("⟨⟨", key=f"first_{selected}", disabled=page==0):
+            st.session_state[page_key] = 0; st.rerun()
+        if pg_cols[1].button("⟨", key=f"prev_{selected}", disabled=page==0):
+            st.session_state[page_key] -= 1; st.rerun()
+        pg_cols[2].markdown(
+            f'<p style="text-align:center;color:var(--text-muted);font-size:12px;padding-top:8px">Page {page+1} of {total_pages} — {len(sorted_df)} videos total</p>',
+            unsafe_allow_html=True)
+        if pg_cols[3].button("⟩", key=f"next_{selected}", disabled=page>=total_pages-1):
+            st.session_state[page_key] += 1; st.rerun()
+        if pg_cols[4].button("⟩⟩", key=f"last_{selected}", disabled=page>=total_pages-1):
+            st.session_state[page_key] = total_pages-1; st.rerun()
+
         st.markdown("<br>", unsafe_allow_html=True)
         st.download_button("⬇  Export CSV", ch_df.to_csv(index=False).encode(), f"{selected.replace(' ','_')}.csv","text/csv")
 
