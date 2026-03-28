@@ -86,6 +86,12 @@ st.markdown("""
 
 *, *::before, *::after { box-sizing: border-box; }
 
+/* Hide Streamlit auto-anchor icons on headers */
+h1 a, h2 a, h3 a { display: none !important; }
+[data-testid="stMarkdownContainer"] h1 a,
+[data-testid="stMarkdownContainer"] h2 a,
+[data-testid="stMarkdownContainer"] h3 a { display: none !important; }
+
 :root {
     --bg:           #0a0a0a;
     --bg-2:         #111111;
