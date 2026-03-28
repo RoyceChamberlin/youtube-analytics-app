@@ -276,6 +276,56 @@ hr { border-color: var(--border) !important; margin: 16px 0 !important; }
 #MainMenu, footer, header { visibility: hidden; }
 .stDeployButton { display: none; }
 [data-testid="stToolbar"] { display: none; }
+
+/* ── Mobile responsive ── */
+@media (max-width: 768px) {
+    /* Tighter padding */
+    .main .block-container { padding: 1rem 1rem 3rem !important; }
+
+    /* Sidebar full width when open */
+    [data-testid="stSidebar"] { min-width: 85vw !important; }
+
+    /* Stack metric cards */
+    [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: 8px !important; }
+    [data-testid="metric-container"] { min-width: 140px !important; flex: 1 1 140px !important; padding: 14px 16px !important; }
+    [data-testid="stMetricValue"] { font-size: 22px !important; }
+
+    /* Tabs — scrollable, smaller text */
+    [data-testid="stTabs"] [role="tablist"] { overflow-x: auto !important; flex-wrap: nowrap !important; -webkit-overflow-scrolling: touch; }
+    [data-testid="stTabs"] button[role="tab"] { padding: 10px 14px !important; font-size: 12px !important; white-space: nowrap; }
+
+    /* Video table — collapse less important cols, shrink thumbnail */
+    .vid-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .vid-thumb-cell { width: 80px !important; }
+    .vid-thumb-cell img, .vid-thumb-cell div { width: 80px !important; height: 45px !important; }
+    .vid-col-hide { display: none !important; }
+
+    /* Charts full width */
+    [data-testid="stPlotlyChart"] { width: 100% !important; }
+
+    /* Page header stack */
+    .page-header { flex-direction: column !important; gap: 8px !important; }
+
+    /* Buttons full width on mobile */
+    .stButton > button { width: 100% !important; }
+
+    /* Folder buttons */
+    .ch-pill { padding: 6px 8px !important; }
+    .ch-name { font-size: 11px !important; }
+
+    /* Alert boxes */
+    .alert { flex-direction: column !important; gap: 6px !important; }
+
+    /* AI response */
+    .ai-response { padding: 14px 14px !important; }
+}
+
+@media (max-width: 480px) {
+    .main .block-container { padding: 0.75rem 0.75rem 3rem !important; }
+    [data-testid="stMetricValue"] { font-size: 20px !important; }
+    h1 { font-size: 18px !important; }
+    [data-testid="stTabs"] button[role="tab"] { padding: 8px 10px !important; font-size: 11px !important; }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1053,48 +1103,45 @@ with T_DETAIL:
         page = st.session_state[page_key]
         page_df = sorted_df.iloc[page * per_page:(page + 1) * per_page].reset_index(drop=True)
 
-        # Build HTML table with thumbnails
+        # Build HTML table with thumbnails — mobile-friendly
+        TH = "padding:10px 12px;text-align:{align};font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border)"
+        TD = "padding:10px 12px;border-bottom:1px solid var(--border)"
+
         rows_html = ""
         for _, row in page_df.iterrows():
             badge = get_badge(row)
-            thumb = (f'<img src="{row["Thumbnail"]}" style="width:120px;height:68px;object-fit:cover;border-radius:6px;display:block">' 
+            thumb = (f'<img src="{row["Thumbnail"]}" style="width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;border-radius:5px;display:block;min-width:72px">' 
                      if row.get("Thumbnail") 
-                     else '<div style="width:120px;height:68px;background:var(--bg-4);border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:20px">▶</div>')
-            title  = sanitize(str(row["Title"]))
-            pub    = row["Published"].strftime("%Y-%m-%d") if pd.notna(row["Published"]) else "—"
-            rows_html += f"""
-            <tr>
-                <td style="padding:10px 12px;border-bottom:1px solid var(--border);width:136px">
+                     else '<div style="width:100%;aspect-ratio:16/9;min-width:72px;background:var(--bg-4);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:16px">▶</div>')
+            title = sanitize(str(row["Title"]))
+            pub   = row["Published"].strftime("%Y-%m-%d") if pd.notna(row["Published"]) else "—"
+            rows_html += f"""<tr style="transition:background 0.1s" onmouseover="this.style.background='#181818'" onmouseout="this.style.background=''">
+                <td class="vid-thumb-cell" style="{TD};width:130px;min-width:72px;max-width:130px">
                     <a href="{row['URL']}" target="_blank" style="text-decoration:none">{thumb}</a>
                 </td>
-                <td style="padding:10px 14px;border-bottom:1px solid var(--border);max-width:420px">
-                    <div style="font-size:13px;font-weight:600;color:#e8e8e8;line-height:1.4;margin-bottom:4px">{title}</div>
-                    <div style="font-size:11px;color:var(--text-muted)">{pub}</div>
-                    <div style="margin-top:4px">{badge}</div>
+                <td style="{TD};min-width:160px">
+                    <div style="font-size:13px;font-weight:600;color:#e8e8e8;line-height:1.4;margin-bottom:3px">{title}</div>
+                    <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">{pub}</div>
+                    {badge}
+                    <div style="margin-top:6px"><a href="{row['URL']}" target="_blank" style="color:var(--red);font-size:11px;font-weight:600;text-decoration:none">Watch ↗</a></div>
                 </td>
-                <td style="padding:10px 14px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{fmt(row["Views"])}</td>
-                <td style="padding:10px 14px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{row["Views per Day"]:.1f}</td>
-                <td style="padding:10px 14px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{row["Like Rate %"]:.2f}%</td>
-                <td style="padding:10px 14px;border-bottom:1px solid var(--border);text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{row["Comment Rate %"]:.2f}%</td>
-                <td style="padding:10px 14px;border-bottom:1px solid var(--border);text-align:center">
-                    <a href="{row['URL']}" target="_blank" style="color:var(--red);font-size:11px;font-weight:600;text-decoration:none">Watch ↗</a>
-                </td>
+                <td style="{TD};text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{fmt(row["Views"])}</td>
+                <td class="vid-col-hide" style="{TD};text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{row["Views per Day"]:.1f}</td>
+                <td class="vid-col-hide" style="{TD};text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{row["Like Rate %"]:.2f}%</td>
+                <td class="vid-col-hide" style="{TD};text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{row["Comment Rate %"]:.2f}%</td>
             </tr>"""
 
         table_html = f"""
-        <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px">
+        <div class="vid-table-wrap" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px">
             <table style="width:100%;border-collapse:collapse;font-family:var(--font)">
-                <thead>
-                    <tr style="background:var(--bg-3)">
-                        <th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border)">Thumbnail</th>
-                        <th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border)">Title</th>
-                        <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border)">Views</th>
-                        <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border)">Views/Day</th>
-                        <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border)">Like Rate</th>
-                        <th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border)">Comment Rate</th>
-                        <th style="padding:10px 14px;text-align:center;font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border)">Link</th>
-                    </tr>
-                </thead>
+                <thead><tr style="background:var(--bg-3)">
+                    <th style="{TH.format(align='left')}">Thumb</th>
+                    <th style="{TH.format(align='left')}">Title</th>
+                    <th style="{TH.format(align='right')}">Views</th>
+                    <th class="vid-col-hide" style="{TH.format(align='right')}">Views/Day</th>
+                    <th class="vid-col-hide" style="{TH.format(align='right')}">Like Rate</th>
+                    <th class="vid-col-hide" style="{TH.format(align='right')}">Comment Rate</th>
+                </tr></thead>
                 <tbody>{rows_html}</tbody>
             </table>
         </div>"""
