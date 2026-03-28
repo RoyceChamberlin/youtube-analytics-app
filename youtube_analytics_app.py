@@ -29,6 +29,55 @@ st.set_page_config(
 )
 
 # ─────────────────────────────────────────────────────────────
+# PASSWORD GATE
+# ─────────────────────────────────────────────────────────────
+def check_password():
+    if st.session_state.get("authenticated"):
+        return True
+    st.markdown("""
+    <style>
+    .login-wrap {
+        max-width: 360px;
+        margin: 100px auto;
+        text-align: center;
+    }
+    .login-icon {
+        width: 52px; height: 52px;
+        background: #ff0033;
+        border-radius: 12px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 24px; font-weight: 900; color: white;
+        margin: 0 auto 20px;
+    }
+    .login-title {
+        font-size: 20px; font-weight: 700; color: #fff;
+        margin-bottom: 4px;
+    }
+    .login-sub {
+        font-size: 13px; color: #737373; margin-bottom: 32px;
+    }
+    </style>
+    <div class="login-wrap">
+        <div class="login-icon">▶</div>
+        <div class="login-title">Chamberlin Media Monitor</div>
+        <div class="login-sub">Enter your team password to continue</div>
+    </div>
+    """, unsafe_allow_html=True)
+    col = st.columns([1,2,1])[1]
+    with col:
+        pwd = st.text_input("Password", type="password", placeholder="••••••••••••", label_visibility="collapsed")
+        if st.button("Sign In", type="primary", use_container_width=True):
+            if pwd == "ChamMedia2026":
+                st.session_state.authenticated = True
+                st.rerun()
+            else:
+                st.error("Incorrect password.")
+    return False
+
+if not check_password():
+    st.stop()
+
+# ─────────────────────────────────────────────────────────────
 # DESIGN SYSTEM
 # ─────────────────────────────────────────────────────────────
 st.markdown("""
@@ -271,6 +320,12 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, channel_name TEXT NOT NULL,
             snapshot_date TEXT NOT NULL, subscribers INTEGER DEFAULT 0, total_views INTEGER DEFAULT 0,
             UNIQUE(channel_name, snapshot_date))""")
+        db.execute("""CREATE TABLE IF NOT EXISTS folders (
+            name TEXT PRIMARY KEY)""")
+        db.execute("""CREATE TABLE IF NOT EXISTS folder_channels (
+            folder_name TEXT NOT NULL,
+            channel_name TEXT NOT NULL,
+            PRIMARY KEY (folder_name, channel_name))""")
         # Migrate: strip any time component from existing snapshot dates
         db.execute("""
             UPDATE snapshots
@@ -325,6 +380,40 @@ def delete_channel_from_db(name):
     with get_db() as db:
         db.execute("DELETE FROM channels WHERE name=?", (name,))
         db.execute("DELETE FROM videos WHERE channel_name=?", (name,))
+        db.execute("DELETE FROM folder_channels WHERE channel_name=?", (name,))
+
+# ── Folder helpers ──────────────────────────────────────────
+def load_folders_from_db() -> dict:
+    """Returns {folder_name: [channel_name, ...]}"""
+    folders = {}
+    with get_db() as db:
+        frows = db.execute("SELECT name FROM folders ORDER BY name").fetchall()
+        for fr in frows:
+            fname = fr["name"]
+            crows = db.execute(
+                "SELECT channel_name FROM folder_channels WHERE folder_name=?", (fname,)
+            ).fetchall()
+            folders[fname] = [r["channel_name"] for r in crows]
+    return folders
+
+def save_folder_to_db(folder_name: str):
+    with get_db() as db:
+        db.execute("INSERT OR IGNORE INTO folders (name) VALUES (?)", (folder_name,))
+
+def delete_folder_from_db(folder_name: str):
+    with get_db() as db:
+        db.execute("DELETE FROM folders WHERE name=?", (folder_name,))
+        db.execute("DELETE FROM folder_channels WHERE folder_name=?", (folder_name,))
+
+def add_channel_to_folder_db(folder_name: str, channel_name: str):
+    with get_db() as db:
+        db.execute("INSERT OR IGNORE INTO folder_channels (folder_name, channel_name) VALUES (?,?)",
+                   (folder_name, channel_name))
+
+def remove_channel_from_folder_db(folder_name: str, channel_name: str):
+    with get_db() as db:
+        db.execute("DELETE FROM folder_channels WHERE folder_name=? AND channel_name=?",
+                   (folder_name, channel_name))
 
 def save_snapshot_to_db(channel_name, subscribers, total_views):
     """Save snapshot to SQLite AND into channel_stats JSON (survives /tmp resets)."""
@@ -580,6 +669,10 @@ if "anthropic_key" not in st.session_state:
     st.session_state.anthropic_key = get_secret("ANTHROPIC_API_KEY")
 if "ideas_cache" not in st.session_state:
     st.session_state.ideas_cache = {}
+if "folders" not in st.session_state:
+    st.session_state.folders = load_folders_from_db()
+if "active_folder" not in st.session_state:
+    st.session_state.active_folder = None   # None = show all channels
 
 # ─────────────────────────────────────────────────────────────
 # SIDEBAR
@@ -600,6 +693,26 @@ with st.sidebar:
             st.session_state.anthropic_key = ant_key
             st.success("Saved.")
 
+    # ── Folder filter ──────────────────────────────────────────
+    if st.session_state.folders:
+        st.markdown('<div class="section-label" style="margin-top:16px">Client Folders</div>', unsafe_allow_html=True)
+        folder_options = ["All Channels"] + sorted(st.session_state.folders.keys())
+        active_label = st.session_state.active_folder or "All Channels"
+        for fname in folder_options:
+            is_active = (fname == active_label)
+            btn_style = "primary" if is_active else "secondary"
+            if st.button(fname, key=f"folder_btn_{fname}", type=btn_style, use_container_width=True):
+                st.session_state.active_folder = None if fname == "All Channels" else fname
+                st.rerun()
+
+    # ── Active channel list (filtered by folder) ────────────────
+    af = st.session_state.active_folder
+    if af and af in st.session_state.folders:
+        visible_channels = {k: v for k, v in st.session_state.channels.items()
+                            if k in st.session_state.folders[af]}
+    else:
+        visible_channels = st.session_state.channels
+
     st.markdown('<div class="section-label" style="margin-top:16px">Channels</div>', unsafe_allow_html=True)
 
     with st.expander("➕  Add Channel"):
@@ -612,7 +725,6 @@ with st.sidebar:
                 st.error("Enter a Channel ID.")
             else:
                 cid = new_id.strip()
-                # Check for duplicate IDs
                 existing_ids = [v["id"] for v in st.session_state.channels.values()]
                 if cid in existing_ids:
                     st.error("That channel is already added.")
@@ -621,19 +733,66 @@ with st.sidebar:
                         try:
                             ch_name = lookup_channel_name(st.session_state.api_key, cid)
                             if ch_name in st.session_state.channels:
-                                # Append ID suffix if name collision
                                 ch_name = f"{ch_name} ({cid[-6:]})"
                             st.session_state.channels[ch_name] = {
                                 "id": cid, "data": None, "channel_stats": {},
                                 "last_refreshed": "Never", "notes": "", "ideas": {}}
                             save_channel_to_db(ch_name, cid, {}, None, "Never")
+                            # Auto-add to active folder if one is selected
+                            if st.session_state.active_folder:
+                                add_channel_to_folder_db(st.session_state.active_folder, ch_name)
+                                st.session_state.folders[st.session_state.active_folder].append(ch_name)
                             st.success(f"Added: {ch_name}")
                             st.rerun()
                         except Exception as e:
                             st.error(f"Could not find channel: {e}")
 
-    if st.session_state.channels:
-        for ch_name in list(st.session_state.channels.keys()):
+    with st.expander("📁  Manage Folders"):
+        # Create new folder
+        new_folder_name = st.text_input("New folder name", placeholder="Client Name")
+        if st.button("Create Folder", use_container_width=True):
+            if new_folder_name.strip():
+                fname = new_folder_name.strip()
+                if fname not in st.session_state.folders:
+                    save_folder_to_db(fname)
+                    st.session_state.folders[fname] = []
+                    st.success(f"Created: {fname}")
+                    st.rerun()
+                else:
+                    st.error("Folder already exists.")
+        # Assign channel to folder
+        if st.session_state.folders and st.session_state.channels:
+            st.markdown("---")
+            assign_ch = st.selectbox("Channel", list(st.session_state.channels.keys()), key="assign_ch")
+            assign_f  = st.selectbox("Add to folder", list(st.session_state.folders.keys()), key="assign_f")
+            ca, cb = st.columns(2)
+            if ca.button("Add", key="do_assign", use_container_width=True):
+                if assign_ch not in st.session_state.folders[assign_f]:
+                    add_channel_to_folder_db(assign_f, assign_ch)
+                    st.session_state.folders[assign_f].append(assign_ch)
+                    st.success("Added!")
+                    st.rerun()
+                else:
+                    st.info("Already in folder.")
+            if cb.button("Remove", key="do_remove", use_container_width=True):
+                if assign_ch in st.session_state.folders[assign_f]:
+                    remove_channel_from_folder_db(assign_f, assign_ch)
+                    st.session_state.folders[assign_f].remove(assign_ch)
+                    st.success("Removed.")
+                    st.rerun()
+        # Delete folder
+        if st.session_state.folders:
+            st.markdown("---")
+            del_f = st.selectbox("Delete folder", list(st.session_state.folders.keys()), key="del_f")
+            if st.button("🗑  Delete Folder", key="do_del_folder", use_container_width=True):
+                delete_folder_from_db(del_f)
+                del st.session_state.folders[del_f]
+                if st.session_state.active_folder == del_f:
+                    st.session_state.active_folder = None
+                st.rerun()
+
+    if visible_channels:
+        for ch_name in list(visible_channels.keys()):
             info  = st.session_state.channels[ch_name]
             stats = info.get("channel_stats", {})
             subs_str = fmt(stats.get("subscribers",0)) if stats.get("subscribers") else "—"
@@ -653,18 +812,19 @@ with st.sidebar:
 
         st.divider()
         if st.session_state.api_key:
-            if st.button("↺  Refresh All Channels", type="primary", use_container_width=True):
+            refresh_label = f"↺  Refresh {af}" if af else "↺  Refresh All"
+            refresh_targets = visible_channels
+            if st.button(refresh_label, type="primary", use_container_width=True):
                 errors = []
                 prog = st.progress(0, text="Refreshing...")
-                total = len(st.session_state.channels)
+                total = len(refresh_targets)
                 fetch_channel_data.clear()
-                for i, (ch_name, info) in enumerate(st.session_state.channels.items()):
+                for i, (ch_name, info) in enumerate(refresh_targets.items()):
                     try:
                         df, stats = fetch_channel_data(st.session_state.api_key, info["id"])
                         ts = datetime.now().strftime("%Y-%m-%d %H:%M")
                         st.session_state.channels[ch_name].update({"data":df,"channel_stats":stats,"last_refreshed":ts})
                         save_channel_to_db(ch_name, info["id"], stats, df, ts, info.get("notes",""), info.get("ideas",{}))
-                        save_snapshot_to_db(ch_name, stats["subscribers"], stats["total_views"])
                         prog.progress((i+1)/total, text=f"Done: {ch_name}")
                     except Exception as e:
                         errors.append(f"{ch_name}: {e}")
@@ -693,23 +853,37 @@ if not st.session_state.channels:
     st.stop()
 
 # ─────────────────────────────────────────────────────────────
+# ACTIVE FILTER — channels visible in main area
+# ─────────────────────────────────────────────────────────────
+_af = st.session_state.active_folder
+if _af and _af in st.session_state.folders:
+    view_channels = {k: v for k, v in st.session_state.channels.items()
+                     if k in st.session_state.folders[_af]}
+    folder_label = f"  {_af}  "
+else:
+    view_channels = st.session_state.channels
+    folder_label = ""
+
+# ─────────────────────────────────────────────────────────────
 # MAIN TABS
 # ─────────────────────────────────────────────────────────────
-T_DASH, T_ALL, T_DETAIL, T_GROWTH = st.tabs(["  Dashboard  ","  All Channels  ","  Channel Detail  ","  Growth Trends  "])
+T_DASH, T_ALL, T_DETAIL = st.tabs(["  Dashboard  ","  All Channels  ","  Channel Detail  "])
 
 # ═══════════════════════════════════════════
 # DASHBOARD
 # ═══════════════════════════════════════════
 with T_DASH:
-    st.markdown("""<div class="page-header">
+    _title = f"Dashboard — {_af}" if _af else "Dashboard"
+    _subtitle = f"Showing {len(view_channels)} channels in {_af}" if _af else f"All {len(view_channels)} channels"
+    st.markdown(f'''<div class="page-header">
         <div class="page-header-left">
-            <h1>Dashboard</h1>
-            <p>Performance overview across all channels</p>
-        </div></div>""", unsafe_allow_html=True)
+            <h1>{_title}</h1>
+            <p>{_subtitle}</p>
+        </div></div>''', unsafe_allow_html=True)
 
-    total_subs  = sum(v.get("channel_stats",{}).get("subscribers",0) for v in st.session_state.channels.values())
-    total_views = sum(v.get("channel_stats",{}).get("total_views",0)  for v in st.session_state.channels.values())
-    loaded      = sum(1 for v in st.session_state.channels.values() if v.get("data") is not None)
+    total_subs  = sum(v.get("channel_stats",{}).get("subscribers",0) for v in view_channels.values())
+    total_views = sum(v.get("channel_stats",{}).get("total_views",0)  for v in view_channels.values())
+    loaded      = sum(1 for v in view_channels.values() if v.get("data") is not None)
 
     k1,k2,k3,k4 = st.columns(4)
     k1.metric("Total Subscribers",   fmt(total_subs))
@@ -738,7 +912,7 @@ with T_DASH:
         st.markdown("<br>", unsafe_allow_html=True)
 
     all_rows = []
-    for ch_name, info in st.session_state.channels.items():
+    for ch_name, info in view_channels.items():
         df = info.get("data")
         if df is not None and not df.empty:
             top = df.nlargest(8,"Views per Day").copy()
@@ -770,7 +944,7 @@ with T_ALL:
         <div class="page-header-left"><h1>All Channels</h1><p>Portfolio overview and comparison</p></div></div>""", unsafe_allow_html=True)
 
     rows = []
-    for ch_name, info in st.session_state.channels.items():
+    for ch_name, info in view_channels.items():
         df = info.get("data"); s = info.get("channel_stats",{})
         rows.append({
             "Channel":         ch_name,
@@ -811,7 +985,7 @@ with T_ALL:
 # CHANNEL DETAIL
 # ═══════════════════════════════════════════
 with T_DETAIL:
-    selected = st.selectbox("Channel", list(st.session_state.channels.keys()), label_visibility="collapsed")
+    selected = st.selectbox("Channel", list(view_channels.keys()) if view_channels else list(st.session_state.channels.keys()), label_visibility="collapsed")
     info     = st.session_state.channels[selected]
     stats    = info.get("channel_stats",{})
     ch_df    = info.get("data")
@@ -832,7 +1006,6 @@ with T_DETAIL:
                     ts = datetime.now().strftime("%Y-%m-%d %H:%M")
                     st.session_state.channels[selected].update({"data":df_new,"channel_stats":stats_new,"last_refreshed":ts})
                     save_channel_to_db(selected, info["id"], stats_new, df_new, ts, info.get("notes",""), info.get("ideas",{}))
-                    save_snapshot_to_db(selected, stats_new["subscribers"], stats_new["total_views"])
                     st.success("Done!")
                     st.rerun()
                 except Exception as e:
@@ -1060,47 +1233,6 @@ with T_DETAIL:
             st.success("Saved.")
 
 # ═══════════════════════════════════════════
-# GROWTH TRENDS
-# ═══════════════════════════════════════════
-with T_GROWTH:
-    st.markdown("""<div class="page-header">
-        <div class="page-header-left"><h1>Growth Trends</h1>
-        <p>Historical snapshots — updated every time you refresh a channel</p>
-        </div></div>""", unsafe_allow_html=True)
-
-    growth_ch = st.selectbox("Channel", list(st.session_state.channels.keys()), key="g_ch")
-    snap_df   = load_snapshots_from_db(growth_ch)
-
-    if snap_df.empty:
-        st.markdown('<div class="alert alert-info"><div class="alert-icon">📸</div><div class="alert-body"><div class="alert-title">No snapshots yet</div><div class="alert-desc">Refresh this channel over multiple days to build a growth history.</div></div></div>', unsafe_allow_html=True)
-    else:
-        snap_df["snapshot_date"] = pd.to_datetime(snap_df["snapshot_date"]).dt.normalize()
-        g1,g2 = st.columns(2)
-        with g1:
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=snap_df["snapshot_date"], y=snap_df["subscribers"],
-                mode="lines+markers", line=dict(color="#ff0033",width=2), marker=dict(size=6,color="#ff0033"),
-                fill="tozeroy", fillcolor="rgba(255,0,51,0.06)", name="Subscribers"))
-            fig.update_layout(**PLOTLY, title="Subscriber Growth", height=300)
-            st.plotly_chart(fig, use_container_width=True)
-        with g2:
-            fig2 = go.Figure()
-            fig2.add_trace(go.Scatter(x=snap_df["snapshot_date"], y=snap_df["total_views"],
-                mode="lines+markers", line=dict(color="#1e8fff",width=2), marker=dict(size=6,color="#1e8fff"),
-                fill="tozeroy", fillcolor="rgba(30,143,255,0.06)", name="Total Views"))
-            fig2.update_layout(**PLOTLY, title="Total Views Growth", height=300)
-            st.plotly_chart(fig2, use_container_width=True)
-
-        if len(snap_df) > 1:
-            snap_df = snap_df.sort_values("snapshot_date")
-            snap_df["Δ Subscribers"] = snap_df["subscribers"].diff().fillna(0).astype(int)
-            snap_df["Δ Total Views"] = snap_df["total_views"].diff().fillna(0).astype(int)
-            snap_df["Date"]          = snap_df["snapshot_date"].dt.strftime("%Y-%m-%d")
-            st.dataframe(
-                snap_df[["Date","subscribers","total_views","Δ Subscribers","Δ Total Views"]]
-                .rename(columns={"subscribers":"Subscribers","total_views":"Total Views"})
-                .sort_values("Date", ascending=False),
-                use_container_width=True, hide_index=True)
 
 # ─────────────────────────────────────────────────────────────
 # FOOTER
