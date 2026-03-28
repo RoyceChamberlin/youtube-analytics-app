@@ -854,6 +854,46 @@ def render_thumb_table(df: pd.DataFrame, show_channel: bool = False, height: int
 # ─────────────────────────────────────────────────────────────
 init_db()
 
+# ── Pre-seeded channels & folders — auto-inserted if not already in DB ──
+SEED_DATA = {
+    "Angel Studios": [
+        ("UCb02Js81Etta5BgML6jK-fQ", "Angel Studios"),
+        ("UCYxkRL8mgBlunTKYX4In7LA", "Angel Kids"),
+        ("UCZFLi-CFABqg49AVj3ZY38Q", "Angel Studios 2"),
+        ("UCPMnn5ZkYHf2epbcekcImPQ", "Angel Studios 3"),
+        ("UCw6rIEbumyIW-Gu34Q3jFeg", "Angel Studios 4"),
+    ],
+    "Blaze Media": [
+        ("UCoxZVv224nHvTmkMk0N3fYA", "Blaze Media"),
+    ],
+    "Backyard Butchers": [
+        ("UC53maXyeHXst2ZGHwsfHGCA", "Backyard Butchers"),
+    ],
+}
+
+def seed_channels_and_folders():
+    """Insert preset channels/folders if they don't already exist in DB."""
+    existing_ids = set()
+    with get_db() as db:
+        rows = db.execute("SELECT channel_id FROM channels").fetchall()
+        existing_ids = {r["channel_id"] for r in rows}
+    for folder_name, channels in SEED_DATA.items():
+        save_folder_to_db(folder_name)
+        for ch_id, placeholder_name in channels:
+            if ch_id not in existing_ids:
+                # Use placeholder name — will be replaced on first refresh
+                actual_name = placeholder_name
+                suffix = 1
+                with get_db() as db:
+                    taken = {r["name"] for r in db.execute("SELECT name FROM channels").fetchall()}
+                while actual_name in taken:
+                    actual_name = f"{placeholder_name} ({suffix})"
+                    suffix += 1
+                save_channel_to_db(actual_name, ch_id, {}, None, "Never")
+                add_channel_to_folder_db(folder_name, actual_name)
+
+seed_channels_and_folders()
+
 if "channels" not in st.session_state:
     st.session_state.channels = load_channels_from_db()
 if "api_key" not in st.session_state:
@@ -865,7 +905,9 @@ if "ideas_cache" not in st.session_state:
 if "folders" not in st.session_state:
     st.session_state.folders = load_folders_from_db()
 if "active_folder" not in st.session_state:
-    st.session_state.active_folder = None   # None = show all channels
+    st.session_state.active_folder = None
+if "bubble_chart" not in st.session_state:
+    st.session_state.bubble_chart = None  # which stat chart to show
 
 # ─────────────────────────────────────────────────────────────
 # SIDEBAR
@@ -1230,38 +1272,172 @@ with T_DETAIL:
         st.markdown('<div class="alert alert-info"><div class="alert-icon">ℹ️</div><div class="alert-body"><div class="alert-title">No data loaded</div><div class="alert-desc">Click Refresh Channel to load video data.</div></div></div>', unsafe_allow_html=True)
         st.stop()
 
-    avg_views    = int(ch_df["Views"].mean())
-    avg_vpd      = ch_df["Views per Day"].mean()
-    top_vid_views= int(ch_df["Views"].max())
-    st.markdown(f'''
-    <div class="yt-bubble-row">
-        <div class="yt-bubble yt-bubble-red">
-            <div class="yt-bubble-label">Subscribers</div>
-            <div class="yt-bubble-value">{fmt(stats.get("subscribers",0))}</div>
-            <div class="yt-bubble-sub">total subscribers</div>
-        </div>
-        <div class="yt-bubble yt-bubble-blue">
-            <div class="yt-bubble-label">Channel Views</div>
-            <div class="yt-bubble-value">{fmt(stats.get("total_views",0))}</div>
-            <div class="yt-bubble-sub">lifetime views</div>
-        </div>
-        <div class="yt-bubble yt-bubble-green">
-            <div class="yt-bubble-label">Avg Views</div>
-            <div class="yt-bubble-value">{fmt(avg_views)}</div>
-            <div class="yt-bubble-sub">per video</div>
-        </div>
-        <div class="yt-bubble yt-bubble-grey">
-            <div class="yt-bubble-label">Avg Views / Day</div>
-            <div class="yt-bubble-value">{avg_vpd:.1f}</div>
-            <div class="yt-bubble-sub">momentum</div>
-        </div>
-        <div class="yt-bubble yt-bubble-grey">
-            <div class="yt-bubble-label">Videos Analyzed</div>
-            <div class="yt-bubble-value">{len(ch_df)}</div>
-            <div class="yt-bubble-sub">top video: {fmt(top_vid_views)} views</div>
-        </div>
-    </div>''', unsafe_allow_html=True)
+    avg_views     = int(ch_df["Views"].mean())
+    avg_vpd       = ch_df["Views per Day"].mean()
+    top_vid_views = int(ch_df["Views"].max())
+    total_views_ch= int(ch_df["Views"].sum())
+    avg_like_rate = ch_df["Like Rate %"].mean()
+    avg_com_rate  = ch_df["Comment Rate %"].mean()
+    total_likes   = int(ch_df["Likes"].sum())
+    total_comments= int(ch_df["Comments"].sum())
+    # Revenue estimate: YouTube avg RPM ~$2-5, use $3.50 per 1000 views as midpoint
+    est_revenue_low  = total_views_ch * 1.5 / 1000
+    est_revenue_high = total_views_ch * 5.0 / 1000
+    rev_str = f"${est_revenue_low/1000:.0f}K–${est_revenue_high/1000:.0f}K" if est_revenue_high >= 1000 else f"${est_revenue_low:.0f}–${est_revenue_high:.0f}"
 
+    # Bubble click buttons — invisible labels under each, using columns
+    b_cols = st.columns(6)
+    bubble_defs = [
+        ("subscribers",  "Subscribers",     fmt(stats.get("subscribers",0)), "total subscribers",     "yt-bubble-red"),
+        ("views",        "Channel Views",    fmt(stats.get("total_views",0)), "lifetime views",        "yt-bubble-blue"),
+        ("avg_views",    "Avg Views",        fmt(avg_views),                  "per video",             "yt-bubble-green"),
+        ("revenue",      "Est. Revenue",     rev_str,                         "based on ~$3.50 RPM",   "yt-bubble-gold"),
+        ("engagement",   "Like Rate",        f"{avg_like_rate:.2f}%",         f"avg comment {avg_com_rate:.2f}%", "yt-bubble-grey"),
+        ("videos",       "Videos",           str(len(ch_df)),                 f"top: {fmt(top_vid_views)} views","yt-bubble-grey"),
+    ]
+
+    bubble_html = '<div class="yt-bubble-row">'
+    for key, label, value, sub, cls in bubble_defs:
+        active = "yt-bubble-active" if st.session_state.bubble_chart == key else ""
+        bubble_html += f'''<div class="yt-bubble {cls} {active}" id="bubble_{key}">
+            <div class="yt-bubble-label">{label}</div>
+            <div class="yt-bubble-value">{value}</div>
+            <div class="yt-bubble-sub">{sub}</div>
+        </div>'''
+    bubble_html += '</div>'
+
+    # Add active bubble style
+    st.markdown("""<style>
+    .yt-bubble-active { border-color: var(--red) !important; background: rgba(255,0,51,0.06) !important; }
+    .yt-bubble-gold { border-left: 3px solid #f5a623; }
+    .yt-bubble { cursor: pointer; }
+    </style>""", unsafe_allow_html=True)
+    st.markdown(bubble_html, unsafe_allow_html=True)
+
+    # Invisible click buttons below bubbles
+    bc = st.columns(6)
+    bubble_keys = [b[0] for b in bubble_defs]
+    bubble_labels = [b[1] for b in bubble_defs]
+    for i, (key, label, _, _, _) in enumerate(bubble_defs):
+        if bc[i].button(f"↗ {label}", key=f"bub_{selected}_{key}", use_container_width=True):
+            st.session_state.bubble_chart = None if st.session_state.bubble_chart == key else key
+            st.rerun()
+
+    # Render drill-down chart if bubble selected
+    bc_sel = st.session_state.bubble_chart
+    if bc_sel == "subscribers":
+        st.markdown("### Subscriber Context")
+        sub_data = pd.DataFrame({
+            "Video": ch_df["Title"].str[:40],
+            "Views": ch_df["Views"],
+            "Like Rate": ch_df["Like Rate %"],
+        }).nlargest(15, "Views")
+        fig_s = px.bar(sub_data, x="Views", y="Video", orientation="h",
+                       title="Top Videos — Subscriber Drivers",
+                       color="Like Rate", color_continuous_scale=["#1a0000","#ff0033"])
+        fig_s.update_layout(**PLOTLY, height=420); fig_s.update_traces(marker_line_width=0)
+        st.plotly_chart(fig_s, use_container_width=True)
+
+    elif bc_sel == "views":
+        st.markdown("### Views Over Time")
+        vt = ch_df.sort_values("Published")
+        fig_v = go.Figure()
+        fig_v.add_trace(go.Scatter(x=vt["Published"], y=vt["Views"].cumsum(),
+            mode="lines", line=dict(color="#1e8fff", width=2),
+            fill="tozeroy", fillcolor="rgba(30,143,255,0.06)", name="Cumulative Views"))
+        fig_v.add_trace(go.Bar(x=vt["Published"], y=vt["Views"],
+            marker_color="rgba(30,143,255,0.3)", marker_line_width=0, name="Per Video", yaxis="y"))
+        fig_v.update_layout(**PLOTLY, title="Views: Per Video + Cumulative", height=360)
+        st.plotly_chart(fig_v, use_container_width=True)
+
+    elif bc_sel == "avg_views":
+        st.markdown("### Views Distribution")
+        fig_hist = go.Figure()
+        fig_hist.add_trace(go.Histogram(x=ch_df["Views"], nbinsx=20,
+            marker_color="#ff0033", marker_line_width=0, opacity=0.8, name="Videos"))
+        fig_hist.add_vline(x=avg_views, line_dash="dash", line_color="#fff",
+            annotation_text=f"Avg: {fmt(avg_views)}", annotation_position="top right")
+        fig_hist.update_layout(**PLOTLY, title="Views Distribution Across Videos",
+            xaxis_title="Views", yaxis_title="# Videos", height=340)
+        st.plotly_chart(fig_hist, use_container_width=True)
+        # Views percentiles
+        pct_df = pd.DataFrame({
+            "Percentile": ["Top 10%", "Top 25%", "Median", "Bottom 25%"],
+            "Views": [
+                int(ch_df["Views"].quantile(0.9)), int(ch_df["Views"].quantile(0.75)),
+                int(ch_df["Views"].quantile(0.5)), int(ch_df["Views"].quantile(0.25))
+            ]
+        })
+        st.dataframe(pct_df, use_container_width=True, hide_index=True)
+
+    elif bc_sel == "revenue":
+        st.markdown("### Estimated Revenue Breakdown")
+        rev_df = ch_df.nlargest(15,"Views").copy()
+        rev_df["Est Revenue Low"]  = (rev_df["Views"] * 1.5 / 1000).round(0)
+        rev_df["Est Revenue High"] = (rev_df["Views"] * 5.0 / 1000).round(0)
+        rev_df["Est Revenue Mid"]  = (rev_df["Views"] * 3.5 / 1000).round(0)
+        fig_rev = go.Figure()
+        fig_rev.add_trace(go.Bar(
+            x=rev_df["Title"].str[:35], y=rev_df["Est Revenue High"],
+            name="High ($5 RPM)", marker_color="rgba(245,166,35,0.3)", marker_line_width=0))
+        fig_rev.add_trace(go.Bar(
+            x=rev_df["Title"].str[:35], y=rev_df["Est Revenue Mid"],
+            name="Mid ($3.5 RPM)", marker_color="#f5a623", marker_line_width=0))
+        fig_rev.add_trace(go.Bar(
+            x=rev_df["Title"].str[:35], y=rev_df["Est Revenue Low"],
+            name="Low ($1.5 RPM)", marker_color="rgba(245,166,35,0.5)", marker_line_width=0))
+        fig_rev.update_layout(**PLOTLY, barmode="overlay", title="Est. Revenue by Video (Top 15)",
+            yaxis_title="USD ($)", height=400)
+        st.plotly_chart(fig_rev, use_container_width=True)
+        st.caption("⚠️ Revenue estimates use typical YouTube RPM ranges ($1.50–$5.00). Actual revenue depends on monetization status, niche, audience location, and ad rates. Requires YouTube Analytics API for real figures.")
+
+    elif bc_sel == "engagement":
+        st.markdown("### Engagement Deep Dive")
+        ec1, ec2 = st.columns(2)
+        with ec1:
+            fig_lr = px.scatter(ch_df, x="Views", y="Like Rate %", hover_name="Title",
+                color="Like Rate %", color_continuous_scale="Reds",
+                title="Like Rate vs Views")
+            fig_lr.update_layout(**PLOTLY, height=320)
+            st.plotly_chart(fig_lr, use_container_width=True)
+        with ec2:
+            fig_cr = px.scatter(ch_df, x="Views", y="Comment Rate %", hover_name="Title",
+                color="Comment Rate %", color_continuous_scale=["#001a33","#1e8fff"],
+                title="Comment Rate vs Views")
+            fig_cr.update_layout(**PLOTLY, height=320)
+            st.plotly_chart(fig_cr, use_container_width=True)
+        # Engagement over time
+        eng_t = ch_df.sort_values("Published")
+        fig_eng = go.Figure()
+        fig_eng.add_trace(go.Scatter(x=eng_t["Published"], y=eng_t["Like Rate %"],
+            mode="lines+markers", name="Like Rate %",
+            line=dict(color="#ff0033",width=2), marker=dict(size=4)))
+        fig_eng.add_trace(go.Scatter(x=eng_t["Published"], y=eng_t["Comment Rate %"],
+            mode="lines+markers", name="Comment Rate %",
+            line=dict(color="#1e8fff",width=2), marker=dict(size=4)))
+        fig_eng.update_layout(**PLOTLY, title="Engagement Rates Over Time", height=300)
+        st.plotly_chart(fig_eng, use_container_width=True)
+
+    elif bc_sel == "videos":
+        st.markdown("### Upload Cadence")
+        monthly2 = ch_df.copy()
+        monthly2["Month"] = monthly2["Published"].dt.to_period("M").astype(str)
+        cad = monthly2.groupby("Month").agg(
+            Count=("Title","count"), Avg_Views=("Views","mean"),
+            Total_Views=("Views","sum")).reset_index()
+        fig_cad = go.Figure()
+        fig_cad.add_trace(go.Bar(x=cad["Month"], y=cad["Count"],
+            name="Videos Posted", marker_color="#252525", marker_line_width=0))
+        fig_cad.add_trace(go.Scatter(x=cad["Month"], y=cad["Total_Views"],
+            name="Total Views", yaxis="y2",
+            line=dict(color="#ff0033",width=2), marker=dict(size=5,color="#ff0033")))
+        PLOTLY2 = {k:v for k,v in PLOTLY.items() if k not in ("xaxis","yaxis")}
+        fig_cad.update_layout(**PLOTLY2, title="Upload Cadence vs Total Views",
+            yaxis2=dict(overlaying="y",side="right",gridcolor="#1e1e1e",color="#737373"),
+            legend=dict(orientation="h",y=1.1), height=360)
+        st.plotly_chart(fig_cad, use_container_width=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
     DT1,DT2,DT3,DT4,DT5 = st.tabs(["  Videos  ","  Charts  ","  Upload Timing  ","  Content Series  ","  Notes  "])
 
     # ── VIDEOS ──
@@ -1304,6 +1480,7 @@ with T_DETAIL:
 
     # ── CHARTS ──
     with DT2:
+        # Row 1: Top 10 views + momentum
         c1,c2 = st.columns(2)
         with c1:
             top10 = ch_df.nlargest(10,"Views").sort_values("Views")
@@ -1315,26 +1492,79 @@ with T_DETAIL:
             st.plotly_chart(fig, use_container_width=True)
         with c2:
             top10m = ch_df.nlargest(10,"Views per Day").sort_values("Views per Day")
-            fig2 = px.bar(top10m, x="Views per Day", y="Title", orientation="h", title="Top 10 by Momentum",
+            fig2 = px.bar(top10m, x="Views per Day", y="Title", orientation="h", title="Top 10 by Momentum (Views/Day)",
                           color="Views per Day", color_continuous_scale=["#001a33","#1e8fff"])
             fig2.update_layout(**PLOTLY, showlegend=False, height=380)
             fig2.update_traces(marker_line_width=0)
             fig2.update_yaxes(tickfont=dict(size=10,color="#737373"))
             st.plotly_chart(fig2, use_container_width=True)
 
+        # Row 2: Views timeline + likes timeline
         trend = ch_df.sort_values("Published")
         fig3 = go.Figure()
-        fig3.add_trace(go.Scatter(x=trend["Published"], y=trend["Views"], mode="lines+markers",
-            line=dict(color="#ff0033",width=2), marker=dict(color="#ff0033",size=5),
+        fig3.add_trace(go.Scatter(x=trend["Published"], y=trend["Views"],
+            mode="lines+markers", line=dict(color="#ff0033",width=2),
+            marker=dict(color="#ff0033",size=5),
             fill="tozeroy", fillcolor="rgba(255,0,51,0.06)", name="Views"))
-        fig3.update_layout(**PLOTLY, title="Views Over Time", height=300)
+        fig3.update_layout(**PLOTLY, title="Views Per Video Over Time", height=280)
         st.plotly_chart(fig3, use_container_width=True)
 
-        fig4 = px.scatter(ch_df, x="Views", y="Like Rate %", size="Comments", color="Comment Rate %",
-                          hover_name="Title", title="Engagement Map — bubble size = Comments",
-                          color_continuous_scale="Reds")
-        fig4.update_layout(**PLOTLY, height=350)
-        st.plotly_chart(fig4, use_container_width=True)
+        c3,c4 = st.columns(2)
+        with c3:
+            fig_likes = go.Figure()
+            fig_likes.add_trace(go.Bar(x=trend["Published"], y=trend["Likes"],
+                marker_color="#ff0033", marker_line_width=0, name="Likes"))
+            fig_likes.update_layout(**PLOTLY, title="Likes Per Video", height=260)
+            st.plotly_chart(fig_likes, use_container_width=True)
+        with c4:
+            fig_coms = go.Figure()
+            fig_coms.add_trace(go.Bar(x=trend["Published"], y=trend["Comments"],
+                marker_color="#1e8fff", marker_line_width=0, name="Comments"))
+            fig_coms.update_layout(**PLOTLY, title="Comments Per Video", height=260)
+            st.plotly_chart(fig_coms, use_container_width=True)
+
+        # Row 3: Engagement map + like rate distribution
+        c5,c6 = st.columns(2)
+        with c5:
+            fig4 = px.scatter(ch_df, x="Views", y="Like Rate %", size="Comments",
+                              color="Comment Rate %", hover_name="Title",
+                              title="Engagement Map (bubble = comments)",
+                              color_continuous_scale="Reds")
+            fig4.update_layout(**PLOTLY, height=340)
+            st.plotly_chart(fig4, use_container_width=True)
+        with c6:
+            fig_dist = go.Figure()
+            fig_dist.add_trace(go.Histogram(x=ch_df["Like Rate %"], nbinsx=15,
+                marker_color="#ff0033", marker_line_width=0, opacity=0.8, name="Like Rate"))
+            fig_dist.add_vline(x=ch_df["Like Rate %"].mean(), line_dash="dash",
+                line_color="#fff", annotation_text="Average")
+            fig_dist.update_layout(**PLOTLY, title="Like Rate Distribution", height=340,
+                xaxis_title="Like Rate %", yaxis_title="# Videos")
+            st.plotly_chart(fig_dist, use_container_width=True)
+
+        # Row 4: Est revenue per video
+        rev_chart = ch_df.nlargest(15,"Views").copy()
+        rev_chart["Est Revenue"] = (rev_chart["Views"] * 3.5 / 1000).round(0)
+        rev_chart = rev_chart.sort_values("Est Revenue")
+        fig_rev = px.bar(rev_chart, x="Est Revenue", y="Title", orientation="h",
+            title="Est. Revenue by Video — Top 15 (at $3.50 RPM)",
+            color="Est Revenue", color_continuous_scale=["#1a0a00","#f5a623"])
+        fig_rev.update_layout(**PLOTLY, showlegend=False, height=420)
+        fig_rev.update_traces(marker_line_width=0)
+        fig_rev.update_yaxes(tickfont=dict(size=10,color="#737373"))
+        fig_rev.update_xaxes(tickprefix="$")
+        st.plotly_chart(fig_rev, use_container_width=True)
+        st.caption("⚠️ Revenue estimates use $3.50 RPM midpoint. Actual revenue varies by niche, audience, and monetization status.")
+
+        # Row 5: Views/Day decay curve (older vids trending)
+        fig_decay = px.scatter(ch_df, x="Days Since Publish", y="Views per Day",
+            hover_name="Title", color="Views",
+            color_continuous_scale=["#111","#ff0033"],
+            title="Views/Day vs Video Age — Evergreen Detector")
+        fig_decay.update_layout(**PLOTLY, height=320,
+            xaxis_title="Days Since Published", yaxis_title="Views/Day")
+        st.plotly_chart(fig_decay, use_container_width=True)
+        st.caption("Videos above the trend line at high age = evergreen content worth promoting.")
 
     # ── UPLOAD TIMING ──
     with DT3:
