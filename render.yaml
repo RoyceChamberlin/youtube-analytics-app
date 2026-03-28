@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: chamberlin-media-monitor
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    startCommand: streamlit run youtube_analytics_app.py
+      --server.port=$PORT
+      --server.address=0.0.0.0
+      --server.headless=true
+      --browser.gatherUsageStats=false
+
+    envVars:
+      - key: YOUTUBE_API_KEY
+        sync: false
+      - key: DATA_DIR
+        value: /data
+
+    disk:
+      name: chamberlin-db
+      mountPath: /data
+      sizeGB: 1
