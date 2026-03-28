@@ -17,6 +17,7 @@ import anthropic
 from datetime import datetime, timedelta
 import sqlite3
 import contextlib
+import streamlit.components.v1 as components
 
 # ─────────────────────────────────────────────────────────────
 # PAGE CONFIG
@@ -766,60 +767,75 @@ def sanitize(text: str) -> str:
     return html.escape(str(text), quote=True)
 
 def render_video_grid(df: pd.DataFrame, page: int = 0, per_page: int = 15):
-    """Legacy grid — kept for compatibility but table is preferred."""
-    return render_thumb_table(df.iloc[page*per_page:(page+1)*per_page].reset_index(drop=True))
+    render_thumb_table(df.iloc[page*per_page:(page+1)*per_page].reset_index(drop=True))
 
-def render_thumb_table(df: pd.DataFrame, show_channel: bool = False):
-    """Render a clean thumbnail table — used in both dashboard and channel detail."""
-    import html as _html
-    TH = "padding:10px 12px;text-align:{align};font-size:10px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.8px;border-bottom:1px solid var(--border);background:var(--bg-3)"
-    TD = "padding:10px 12px;border-bottom:1px solid var(--border)"
-
-    rows_html = ""
+def render_thumb_table(df: pd.DataFrame, show_channel: bool = False, height: int = 600):
+    """Render video table inside a self-contained iframe via components.html — immune to Streamlit HTML escaping."""
+    import html as _h
+    rows = ""
     for _, row in df.iterrows():
-        badge = get_badge(row)
-        thumb = (f'<img src="{_html.escape(str(row["Thumbnail"]))}" style="width:100%;height:auto;aspect-ratio:16/9;object-fit:cover;border-radius:5px;display:block;min-width:72px" loading="lazy">'
-                 if row.get("Thumbnail")
-                 else '<div style="width:100%;aspect-ratio:16/9;min-width:72px;background:var(--bg-4);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--text-dim);font-size:16px">▶</div>')
-        title = sanitize(str(row.get("Title", "")))
-        pub   = row["Published"].strftime("%Y-%m-%d") if pd.notna(row.get("Published")) else "—"
-        ch_tag = (f'<div style="font-size:10px;color:var(--red);font-weight:600;margin-bottom:3px">{sanitize(str(row.get("Channel","")))}</div>'
-                  if show_channel and row.get("Channel") else "")
-        vpd   = f'{row["Views per Day"]:.1f}' if "Views per Day" in row else "—"
-        lr    = f'{row["Like Rate %"]:.2f}%' if "Like Rate %" in row else "—"
-        cr    = f'{row["Comment Rate %"]:.2f}%' if "Comment Rate %" in row else "—"
-        rows_html += f"""<tr onmouseover="this.style.background='#181818'" onmouseout="this.style.background=''">
-            <td class="vid-thumb-cell" style="{TD};width:130px;min-width:72px;max-width:130px">
-                <a href="{_html.escape(str(row.get('URL','#')))}" target="_blank" style="text-decoration:none">{thumb}</a>
-            </td>
-            <td style="{TD};min-width:160px">
-                {ch_tag}
-                <div style="font-size:13px;font-weight:600;color:#e8e8e8;line-height:1.4;margin-bottom:3px">{title}</div>
-                <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px">{pub}</div>
-                {badge}
-                <div style="margin-top:6px"><a href="{_html.escape(str(row.get('URL','#')))}" target="_blank" style="color:var(--red);font-size:11px;font-weight:600;text-decoration:none">Watch ↗</a></div>
-            </td>
-            <td style="{TD};text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{fmt(row.get("Views",0))}</td>
-            <td class="vid-col-hide" style="{TD};text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{vpd}</td>
-            <td class="vid-col-hide" style="{TD};text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{lr}</td>
-            <td class="vid-col-hide" style="{TD};text-align:right;font-family:var(--font-mono);font-size:12px;color:#e8e8e8;white-space:nowrap">{cr}</td>
+        badge_map = {"NEW": ("#1e8fff","#0d3a6e"), "HOT": ("#ff0033","#3a0010"), "EVERGREEN": ("#1db954","#0a2e1a")}
+        b_text = ""
+        if row.get("Days Since Publish",999) <= 14:          b_text = "NEW"
+        elif row.get("Views per Day", 0) >= 500:              b_text = "HOT"
+        elif row.get("Days Since Publish",0) >= 90 and row.get("Views per Day",0) >= 100: b_text = "EVERGREEN"
+        badge_html = (f'<span style="background:{badge_map[b_text][1]};color:{badge_map[b_text][0]};border:1px solid {badge_map[b_text][0]};padding:2px 7px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:0.5px;font-family:monospace;margin-right:4px">{b_text}</span>' if b_text else "")
+        thumb_url = _h.escape(str(row.get("Thumbnail","")))
+        url       = _h.escape(str(row.get("URL","#")))
+        title     = _h.escape(str(row.get("Title","")))
+        pub       = row["Published"].strftime("%Y-%m-%d") if pd.notna(row.get("Published")) else "—"
+        ch_html   = (f'<div style="font-size:10px;color:#ff0033;font-weight:700;margin-bottom:2px">{_h.escape(str(row.get("Channel","")))}</div>' if show_channel and row.get("Channel") else "")
+        thumb_el  = (f'<img src="{thumb_url}" style="width:120px;height:68px;object-fit:cover;border-radius:5px;display:block" loading="lazy">' if thumb_url else '<div style="width:120px;height:68px;background:#1f1f1f;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#444;font-size:18px">▶</div>')
+        views     = fmt(int(row.get("Views",0)))
+        likes     = fmt(int(row.get("Likes",0)))
+        comments  = fmt(int(row.get("Comments",0)))
+        vpd       = f'{row.get("Views per Day",0):.1f}'
+        lr        = f'{row.get("Like Rate %",0):.2f}%'
+        cr        = f'{row.get("Comment Rate %",0):.2f}%'
+        days      = str(int(row.get("Days Since Publish",0)))
+        rows += f"""
+        <tr class="vrow">
+          <td style="padding:8px 10px;width:136px;min-width:120px"><a href="{url}" target="_blank">{thumb_el}</a></td>
+          <td style="padding:8px 12px;min-width:200px;max-width:360px">
+            {ch_html}
+            <div style="font-size:13px;font-weight:600;color:#e8e8e8;line-height:1.4;margin-bottom:3px">{title}</div>
+            <div style="font-size:11px;color:#737373;margin-bottom:4px">{pub} &nbsp;·&nbsp; {days}d ago</div>
+            {badge_html}<a href="{url}" target="_blank" style="color:#ff0033;font-size:10px;font-weight:700;text-decoration:none;letter-spacing:0.3px">WATCH ↗</a>
+          </td>
+          <td class="num">{views}</td>
+          <td class="num">{likes}</td>
+          <td class="num">{comments}</td>
+          <td class="num">{vpd}</td>
+          <td class="num">{lr}</td>
+          <td class="num">{cr}</td>
         </tr>"""
 
-    table_html = f"""
-    <div class="vid-table-wrap" style="border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:16px">
-        <table style="width:100%;border-collapse:collapse;font-family:var(--font)">
-            <thead><tr>
-                <th style="{TH.format(align='left')}">Thumb</th>
-                <th style="{TH.format(align='left')}">Title</th>
-                <th style="{TH.format(align='right')}">Views</th>
-                <th class="vid-col-hide" style="{TH.format(align='right')}">Views/Day</th>
-                <th class="vid-col-hide" style="{TH.format(align='right')}">Like Rate</th>
-                <th class="vid-col-hide" style="{TH.format(align='right')}">Comment Rate</th>
-            </tr></thead>
-            <tbody>{rows_html}</tbody>
-        </table>
-    </div>"""
-    st.markdown(table_html, unsafe_allow_html=True)
+    html_doc = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+    <style>
+      *{{box-sizing:border-box;margin:0;padding:0}}
+      body{{background:#0a0a0a;font-family:'Instrument Sans',system-ui,sans-serif;color:#e8e8e8}}
+      table{{width:100%;border-collapse:collapse;font-size:13px}}
+      thead tr{{background:#181818;position:sticky;top:0;z-index:10}}
+      th{{padding:10px 12px;text-align:right;font-size:9px;font-weight:700;color:#4a4a4a;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #252525;white-space:nowrap}}
+      th:nth-child(1),th:nth-child(2){{text-align:left}}
+      .vrow:hover td{{background:#141414}}
+      td{{border-bottom:1px solid #1a1a1a;vertical-align:middle;transition:background 0.1s}}
+      .num{{text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;color:#e8e8e8;white-space:nowrap;padding:8px 12px}}
+      ::-webkit-scrollbar{{width:4px;height:4px}}
+      ::-webkit-scrollbar-track{{background:#0a0a0a}}
+      ::-webkit-scrollbar-thumb{{background:#2a2a2a;border-radius:2px}}
+    </style></head><body>
+    <table>
+      <thead><tr>
+        <th>Thumb</th><th>Title</th>
+        <th>Views</th><th>Likes</th><th>Comments</th>
+        <th>Views/Day</th><th>Like Rate</th><th>Comment Rate</th>
+      </tr></thead>
+      <tbody>{rows}</tbody>
+    </table>
+    </body></html>"""
+
+    components.html(html_doc, height=height, scrolling=True)
 
 # ─────────────────────────────────────────────────────────────
 # INIT
@@ -1399,33 +1415,150 @@ with T_DETAIL:
 
     # ── AI IDEAS ──
     with DT5:
-        st.markdown('<div class="section-label">Claude AI — Strategic Ideas</div>', unsafe_allow_html=True)
-        if not st.session_state.anthropic_key:
-            st.markdown('<div class="alert alert-warn"><div class="alert-icon">⚠️</div><div class="alert-body"><div class="alert-title">Anthropic API key required</div><div class="alert-desc">Add your key in the sidebar to enable AI-powered ideas.</div></div></div>', unsafe_allow_html=True)
-        else:
-            if st.button("✦  Generate Strategic Ideas with Claude", type="primary"):
-                with st.spinner("Claude is analyzing your channel..."):
-                    try:
-                        result = generate_ai_ideas(
-                            st.session_state.anthropic_key, selected, ch_df,
-                            stats.get("description",""))
-                        st.session_state.ideas_cache[selected] = result
-                        st.session_state.channels[selected]["ideas"] = {"ai_text": result}
-                        save_channel_to_db(selected, info["id"], stats, ch_df,
-                                           info.get("last_refreshed",""), info.get("notes",""), {"ai_text": result})
-                    except Exception as e:
-                        st.error(f"Claude API error: {e}")
+        # Animated gradient background page
+        components.html("""<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{background:transparent;font-family:'Instrument Sans',system-ui,sans-serif}
+        .bg{
+            position:fixed;inset:0;z-index:0;
+            background:linear-gradient(135deg,#0a0a0a 0%,#1a0008 25%,#0a0a14 50%,#001a0a 75%,#0a0a0a 100%);
+            background-size:400% 400%;
+            animation:gradShift 12s ease infinite;
+        }
+        @keyframes gradShift{
+            0%{background-position:0% 50%}
+            50%{background-position:100% 50%}
+            100%{background-position:0% 50%}
+        }
+        </style></head><body><div class="bg"></div></body></html>""", height=0)
 
-            cached = (st.session_state.ideas_cache.get(selected) or
-                      info.get("ideas",{}).get("ai_text",""))
+        # Header
+        st.markdown("""
+        <div style="text-align:center;padding:32px 20px 24px;position:relative">
+            <div style="display:inline-flex;align-items:center;gap:8px;background:rgba(255,0,51,0.08);border:1px solid rgba(255,0,51,0.2);border-radius:20px;padding:5px 14px;margin-bottom:16px">
+                <div style="width:6px;height:6px;border-radius:50%;background:#ff0033;animation:pulse 2s infinite"></div>
+                <span style="font-family:monospace;font-size:10px;font-weight:700;color:#ff0033;letter-spacing:1.5px;text-transform:uppercase">Claude AI</span>
+            </div>
+            <h2 style="font-size:26px;font-weight:700;color:#fff;letter-spacing:-0.5px;margin-bottom:8px">Strategic Video Ideas</h2>
+            <p style="color:#737373;font-size:13px;max-width:480px;margin:0 auto;line-height:1.6">
+                Select a channel, hit generate, and Claude will analyze your top-performing content to suggest data-driven video ideas.
+            </p>
+        </div>
+        <style>@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}</style>
+        """, unsafe_allow_html=True)
+
+        if not st.session_state.anthropic_key:
+            st.markdown('<div class="alert alert-warn" style="max-width:520px;margin:0 auto"><div class="alert-icon">⚠️</div><div class="alert-body"><div class="alert-title">Anthropic API key required</div><div class="alert-desc">Add your key under API Keys in the sidebar.</div></div></div>', unsafe_allow_html=True)
+        else:
+            # Channel picker + generate button
+            ai_cols = st.columns([3,2])
+            with ai_cols[0]:
+                ai_channel = st.selectbox(
+                    "Channel to analyze",
+                    list(st.session_state.channels.keys()),
+                    index=list(st.session_state.channels.keys()).index(selected) if selected in st.session_state.channels else 0,
+                    key="ai_ch_pick"
+                )
+            with ai_cols[1]:
+                st.markdown("<br>", unsafe_allow_html=True)
+                generate_clicked = st.button("✦  Generate Ideas", type="primary", use_container_width=True)
+
+            if generate_clicked:
+                ai_info = st.session_state.channels.get(ai_channel, {})
+                ai_df   = ai_info.get("data")
+                if ai_df is None or ai_df.empty:
+                    st.error("Refresh that channel first to load video data.")
+                else:
+                    with st.spinner("Claude is analyzing your channel..."):
+                        try:
+                            result = generate_ai_ideas(
+                                st.session_state.anthropic_key, ai_channel, ai_df,
+                                ai_info.get("channel_stats",{}).get("description",""))
+                            st.session_state.ideas_cache[ai_channel] = result
+                            st.session_state.channels[ai_channel]["ideas"] = {"ai_text": result}
+                            ai_stats = ai_info.get("channel_stats",{})
+                            save_channel_to_db(ai_channel, ai_info["id"], ai_stats, ai_df,
+                                               ai_info.get("last_refreshed",""),
+                                               ai_info.get("notes",""), {"ai_text": result})
+                        except Exception as e:
+                            st.error(f"Claude API error: {e}")
+
+            # Display response
+            cached = (st.session_state.ideas_cache.get(ai_channel if 'ai_channel' in dir() else selected) or
+                      st.session_state.channels.get(ai_channel if 'ai_channel' in dir() else selected, {}).get("ideas",{}).get("ai_text",""))
+
             if cached:
-                st.markdown(f"""<div class="ai-response">
-                    <div class="ai-header">
-                        <div class="ai-dot"></div>
-                        <div class="ai-label">Claude Analysis</div>
-                    </div>
-                    <div style="font-size:13px;line-height:1.9;color:#c8c8c8;white-space:pre-wrap">{cached}</div>
-                </div>""", unsafe_allow_html=True)
+                # Format the markdown response in a styled chat bubble
+                import re as _re
+                # Convert **bold** to styled spans
+                formatted = _re.sub(r'\*\*(.+?)\*\*', r'<strong style="color:#fff"></strong>', cached)
+                # Number list items get cards
+                lines = formatted.split("\n")
+                output_html = ""
+                for line in lines:
+                    line = line.strip()
+                    if not line:
+                        output_html += '<div style="height:8px"></div>'
+                    elif _re.match(r'^\d+\.', line):
+                        output_html += f'<div style="background:rgba(255,255,255,0.03);border:1px solid #252525;border-left:3px solid #ff0033;border-radius:6px;padding:12px 14px;margin-bottom:8px;font-size:13px;line-height:1.7;color:#c8c8c8">{line}</div>'
+                    elif line.startswith("#"):
+                        clean = line.lstrip("# ")
+                        output_html += f'<div style="font-size:14px;font-weight:700;color:#fff;margin:16px 0 6px">{clean}</div>'
+                    elif line.startswith("-") or line.startswith("•"):
+                        output_html += f'<div style="font-size:13px;color:#c8c8c8;line-height:1.7;padding-left:12px;margin-bottom:4px">◦ {line[1:].strip()}</div>'
+                    else:
+                        output_html += f'<div style="font-size:13px;color:#c8c8c8;line-height:1.8;margin-bottom:4px">{line}</div>'
+
+                components.html(f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+                <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+                <style>
+                  *{{box-sizing:border-box;margin:0;padding:0}}
+                  body{{
+                    background:linear-gradient(160deg,#0f0008 0%,#0a0a0a 40%,#00080f 100%);
+                    font-family:'Instrument Sans',system-ui,sans-serif;
+                    padding:24px;color:#c8c8c8;
+                    animation:bgShift 15s ease infinite;
+                    background-size:300% 300%;
+                  }}
+                  @keyframes bgShift{{
+                    0%{{background-position:0% 50%}}
+                    50%{{background-position:100% 50%}}
+                    100%{{background-position:0% 50%}}
+                  }}
+                  .header{{display:flex;align-items:center;gap:10px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #1e1e1e}}
+                  .dot{{width:8px;height:8px;border-radius:50%;background:#ff0033;animation:pulse 2s infinite;flex-shrink:0}}
+                  @keyframes pulse{{0%,100%{{opacity:1}}50%{{opacity:0.3}}}}
+                  .label{{font-family:monospace;font-size:10px;font-weight:700;color:#ff0033;letter-spacing:1.5px;text-transform:uppercase}}
+                  .ch-name{{font-size:13px;color:#737373;margin-left:auto}}
+                  strong{{color:#fff}}
+                  ::-webkit-scrollbar{{width:4px}}
+                  ::-webkit-scrollbar-track{{background:#0a0a0a}}
+                  ::-webkit-scrollbar-thumb{{background:#2a2a2a;border-radius:2px}}
+                </style></head><body>
+                <div class="header">
+                  <div class="dot"></div>
+                  <div class="label">Claude Analysis</div>
+                  <div class="ch-name">{ai_channel if 'ai_channel' in dir() else selected}</div>
+                </div>
+                {output_html}
+                </body></html>""", height=600, scrolling=True)
+
+                # Regenerate button below
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("↺  Regenerate Ideas", key="regen_ideas"):
+                    ai_info2 = st.session_state.channels.get(ai_channel if 'ai_channel' in dir() else selected, {})
+                    ai_df2   = ai_info2.get("data")
+                    if ai_df2 is not None and not ai_df2.empty:
+                        with st.spinner("Regenerating..."):
+                            try:
+                                ch_key = ai_channel if 'ai_channel' in dir() else selected
+                                result2 = generate_ai_ideas(
+                                    st.session_state.anthropic_key, ch_key, ai_df2,
+                                    ai_info2.get("channel_stats",{}).get("description",""))
+                                st.session_state.ideas_cache[ch_key] = result2
+                                st.rerun()
+                            except Exception as e:
+                                st.error(str(e))
 
     # ── NOTES ──
     with DT6:
