@@ -277,6 +277,86 @@ hr { border-color: var(--border) !important; margin: 16px 0 !important; }
 .stDeployButton { display: none; }
 [data-testid="stToolbar"] { display: none; }
 
+/* ── Force sidebar visible on desktop ── */
+@media (min-width: 769px) {
+    [data-testid="stSidebar"] {
+        display: flex !important;
+        visibility: visible !important;
+        width: 280px !important;
+        min-width: 280px !important;
+        transform: none !important;
+    }
+    /* Keep collapse button visible so user can hide if they want */
+    [data-testid="collapsedControl"] { display: flex !important; }
+    button[kind="header"] { display: flex !important; }
+}
+
+/* ── Sidebar toggle button — always visible ── */
+[data-testid="collapsedControl"] {
+    display: flex !important;
+    background: var(--bg-3) !important;
+    border: 1px solid var(--border-2) !important;
+    border-radius: 0 8px 8px 0 !important;
+    color: var(--text-muted) !important;
+    width: 20px !important;
+    top: 50% !important;
+    z-index: 999 !important;
+}
+
+/* ── Smaller refresh button in channel detail ── */
+.refresh-btn-wrap .stButton > button {
+    font-size: 11px !important;
+    padding: 6px 12px !important;
+    font-weight: 500 !important;
+}
+
+/* ── YouTube Studio style stat bubbles ── */
+.yt-bubble-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+.yt-bubble {
+    background: var(--bg-3);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    flex: 1 1 140px;
+    min-width: 130px;
+    transition: border-color 0.2s, background 0.2s;
+    cursor: default;
+}
+.yt-bubble:hover {
+    background: var(--bg-4);
+    border-color: var(--border-2);
+}
+.yt-bubble-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    margin-bottom: 8px;
+}
+.yt-bubble-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.5px;
+    line-height: 1;
+    margin-bottom: 4px;
+}
+.yt-bubble-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+.yt-bubble-red   { border-left: 3px solid var(--red); }
+.yt-bubble-blue  { border-left: 3px solid var(--blue); }
+.yt-bubble-green { border-left: 3px solid var(--green); }
+.yt-bubble-grey  { border-left: 3px solid #444; }
+
 /* ── Mobile responsive ── */
 @media (max-width: 768px) {
     /* Tighter padding */
@@ -941,11 +1021,29 @@ with T_DASH:
     total_views = sum(v.get("channel_stats",{}).get("total_views",0)  for v in view_channels.values())
     loaded      = sum(1 for v in view_channels.values() if v.get("data") is not None)
 
-    k1,k2,k3,k4 = st.columns(4)
-    k1.metric("Total Subscribers",   fmt(total_subs))
-    k2.metric("Combined Views",       fmt(total_views))
-    k3.metric("Channels Tracked",     len(st.session_state.channels))
-    k4.metric("Channels with Data",   loaded)
+    st.markdown(f'''
+    <div class="yt-bubble-row">
+        <div class="yt-bubble yt-bubble-red">
+            <div class="yt-bubble-label">Total Subscribers</div>
+            <div class="yt-bubble-value">{fmt(total_subs)}</div>
+            <div class="yt-bubble-sub">across all channels</div>
+        </div>
+        <div class="yt-bubble yt-bubble-blue">
+            <div class="yt-bubble-label">Combined Views</div>
+            <div class="yt-bubble-value">{fmt(total_views)}</div>
+            <div class="yt-bubble-sub">lifetime total</div>
+        </div>
+        <div class="yt-bubble yt-bubble-green">
+            <div class="yt-bubble-label">Channels Tracked</div>
+            <div class="yt-bubble-value">{len(view_channels)}</div>
+            <div class="yt-bubble-sub">{loaded} with data loaded</div>
+        </div>
+        <div class="yt-bubble yt-bubble-grey">
+            <div class="yt-bubble-label">Active Folder</div>
+            <div class="yt-bubble-value" style="font-size:16px;padding-top:4px">{_af or "All Channels"}</div>
+            <div class="yt-bubble-sub">current view</div>
+        </div>
+    </div>''', unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1054,6 +1152,7 @@ with T_DETAIL:
                 ID: {info['id']}  •  Last refreshed: {info.get('last_refreshed','Never')}
             </p></div>""", unsafe_allow_html=True)
     with head_r:
+        st.markdown('<div class="refresh-btn-wrap">', unsafe_allow_html=True)
         if st.button("↺  Refresh Channel", type="primary", use_container_width=True):
             with st.spinner("Fetching from YouTube..."):
                 try:
@@ -1066,6 +1165,7 @@ with T_DETAIL:
                     st.rerun()
                 except Exception as e:
                     st.error(str(e))
+        st.markdown('</div>', unsafe_allow_html=True)
 
     st.divider()
 
@@ -1073,14 +1173,37 @@ with T_DETAIL:
         st.markdown('<div class="alert alert-info"><div class="alert-icon">ℹ️</div><div class="alert-body"><div class="alert-title">No data loaded</div><div class="alert-desc">Click Refresh Channel to load video data.</div></div></div>', unsafe_allow_html=True)
         st.stop()
 
-    m1,m2,m3,m4,m5 = st.columns(5)
-    m1.metric("Subscribers",     fmt(stats.get("subscribers",0)))
-    m2.metric("Total Views",     fmt(stats.get("total_views",0)))
-    m3.metric("Videos Analyzed", len(ch_df))
-    m4.metric("Avg Views",       fmt(int(ch_df["Views"].mean())))
-    m5.metric("Avg Views / Day", f"{ch_df['Views per Day'].mean():.1f}")
-
-    st.markdown("<br>", unsafe_allow_html=True)
+    avg_views    = int(ch_df["Views"].mean())
+    avg_vpd      = ch_df["Views per Day"].mean()
+    top_vid_views= int(ch_df["Views"].max())
+    st.markdown(f'''
+    <div class="yt-bubble-row">
+        <div class="yt-bubble yt-bubble-red">
+            <div class="yt-bubble-label">Subscribers</div>
+            <div class="yt-bubble-value">{fmt(stats.get("subscribers",0))}</div>
+            <div class="yt-bubble-sub">total subscribers</div>
+        </div>
+        <div class="yt-bubble yt-bubble-blue">
+            <div class="yt-bubble-label">Channel Views</div>
+            <div class="yt-bubble-value">{fmt(stats.get("total_views",0))}</div>
+            <div class="yt-bubble-sub">lifetime views</div>
+        </div>
+        <div class="yt-bubble yt-bubble-green">
+            <div class="yt-bubble-label">Avg Views</div>
+            <div class="yt-bubble-value">{fmt(avg_views)}</div>
+            <div class="yt-bubble-sub">per video</div>
+        </div>
+        <div class="yt-bubble yt-bubble-grey">
+            <div class="yt-bubble-label">Avg Views / Day</div>
+            <div class="yt-bubble-value">{avg_vpd:.1f}</div>
+            <div class="yt-bubble-sub">momentum</div>
+        </div>
+        <div class="yt-bubble yt-bubble-grey">
+            <div class="yt-bubble-label">Videos Analyzed</div>
+            <div class="yt-bubble-value">{len(ch_df)}</div>
+            <div class="yt-bubble-sub">top video: {fmt(top_vid_views)} views</div>
+        </div>
+    </div>''', unsafe_allow_html=True)
 
     DT1,DT2,DT3,DT4,DT5,DT6 = st.tabs(["  Videos  ","  Charts  ","  Upload Timing  ","  Content Series  ","  AI Ideas  ","  Notes  "])
 
