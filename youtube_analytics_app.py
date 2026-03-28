@@ -649,7 +649,7 @@ def seed_channels_and_folders():
                     taken={r["name"] for r in db.execute("SELECT name FROM channels").fetchall()}
                 while actual_name in taken:
                     actual_name=f"{placeholder_name} ({suffix})"; suffix+=1
-                save_channel_to_db(actual_name,ch_id,{},"None","Never")
+                save_channel_to_db(actual_name,ch_id,{},None,"Never")
                 add_channel_to_folder_db(folder_name,actual_name)
 
 seed_channels_and_folders()
