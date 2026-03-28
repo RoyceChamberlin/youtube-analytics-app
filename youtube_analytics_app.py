@@ -1,6 +1,6 @@
 """
 Chamberlin Media Monitor
-Streamlit Cloud-ready • YouTube Data API v3
+Railway-ready • YouTube Data API v3
 """
 
 import streamlit as st
@@ -299,7 +299,11 @@ def plotly_cfg():
 # ─────────────────────────────────────────────────────────────
 # DATABASE
 # ─────────────────────────────────────────────────────────────
-DB_PATH = "/tmp/chamberlin.db" if os.path.exists("/tmp") else "chamberlin.db"
+# Railway mounts a persistent volume at /data.
+# Falls back to local dir for development.
+_DATA_DIR = os.environ.get("DATA_DIR", "/data")
+os.makedirs(_DATA_DIR, exist_ok=True)
+DB_PATH = os.path.join(_DATA_DIR, "chamberlin.db")
 
 @contextlib.contextmanager
 def get_db():
