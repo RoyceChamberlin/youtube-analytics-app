@@ -1,6 +1,6 @@
 """
 Chamberlin Media Monitor
-Streamlit Cloud-ready • YouTube Data API v3 • Claude AI
+Streamlit Cloud-ready • YouTube Data API v3
 """
 
 import streamlit as st
@@ -13,7 +13,6 @@ import re
 import json
 import os
 import time
-import anthropic
 from datetime import datetime, timedelta
 import sqlite3
 import contextlib
@@ -87,7 +86,6 @@ st.markdown("""
 
 *, *::before, *::after { box-sizing: border-box; }
 
-/* Hide Streamlit auto-anchor icons on headers */
 h1 a, h2 a, h3 a { display: none !important; }
 [data-testid="stMarkdownContainer"] h1 a,
 [data-testid="stMarkdownContainer"] h2 a,
@@ -230,11 +228,36 @@ hr { border-color: var(--border) !important; margin: 16px 0 !important; }
 .alert-success{ background: rgba(29,185,84,0.08); border: 1px solid rgba(29,185,84,0.25); color: #5ce68f; }
 .alert-info   { background: rgba(30,143,255,0.08); border: 1px solid rgba(30,143,255,0.25); color: #7ac2ff; }
 
+/* Time filter bar */
+.time-bar {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    background: var(--bg-3); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px 14px;
+    margin-bottom: 20px;
+}
+.time-bar-label {
+    font-family: var(--font-mono); font-size: 9px; font-weight: 700;
+    color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.2px;
+    margin-right: 4px; white-space: nowrap;
+}
+.time-chip {
+    background: var(--bg-4); border: 1px solid var(--border-2);
+    color: var(--text-muted); padding: 4px 12px;
+    border-radius: 20px; font-size: 11px; font-weight: 600;
+    cursor: pointer; transition: all 0.15s; white-space: nowrap;
+    font-family: var(--font-mono);
+}
+.time-chip:hover { border-color: #444; color: var(--text); }
+.time-chip-active {
+    background: rgba(255,0,51,0.12);
+    border-color: rgba(255,0,51,0.4);
+    color: #ff6680;
+}
+
 .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 4px; }
 .video-card { background: var(--bg-3); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: border-color 0.2s, transform 0.15s; }
 .video-card:hover { border-color: var(--border-2); transform: translateY(-2px); }
 .video-thumb { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; background: var(--bg-4); }
-.video-thumb-ph { width: 100%; aspect-ratio: 16/9; background: var(--bg-4); display: flex; align-items: center; justify-content: center; color: var(--text-dim); font-size: 28px; }
 .video-card-body { padding: 12px 14px; }
 .video-card-title { font-size: 13px; font-weight: 600; color: var(--text); line-height: 1.4; margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .video-card-meta { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -245,12 +268,6 @@ hr { border-color: var(--border) !important; margin: 16px 0 !important; }
 .badge-hot  { background: rgba(255,0,51,0.15); color: #ff6680; border: 1px solid rgba(255,0,51,0.3); }
 .badge-new  { background: rgba(30,143,255,0.15); color: #7ac2ff; border: 1px solid rgba(30,143,255,0.3); }
 .badge-ever { background: rgba(29,185,84,0.15); color: #5ce68f; border: 1px solid rgba(29,185,84,0.3); }
-
-.ai-response { background: linear-gradient(135deg, rgba(255,0,51,0.04) 0%, rgba(0,0,0,0) 60%); border: 1px solid rgba(255,0,51,0.2); border-radius: var(--radius); padding: 20px 22px; margin-bottom: 16px; }
-.ai-header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
-.ai-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); animation: pulse 2s infinite; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-.ai-label { font-family: var(--font-mono); font-size: 10px; font-weight: 600; color: var(--red); letter-spacing: 1px; text-transform: uppercase; }
 
 .best-day { background: rgba(29,185,84,0.06); border: 1px solid rgba(29,185,84,0.2); border-radius: var(--radius); padding: 16px 20px; display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
 .best-day-icon { font-size: 28px; }
@@ -279,14 +296,10 @@ hr { border-color: var(--border) !important; margin: 16px 0 !important; }
 [data-testid="stToolbar"] { display: none !important; }
 [data-testid="stStatusWidget"] { display: none !important; }
 [data-testid="stDecoration"] { display: none !important; }
-iframe[title="st_navbar"] { display: none !important; }
 .viewerBadge_container__1QSob { display: none !important; }
 .stActionButton { display: none !important; }
-/* Hide "Made with Streamlit" footer and running indicator */
-.reportview-container .main footer { display: none !important; }
-section[data-testid="stSidebarUserContent"] ~ div > div:last-child { display: none !important; }
 
-/* ── Sidebar toggle — always visible on both mobile and desktop ── */
+/* ── Sidebar toggle — always visible ── */
 [data-testid="collapsedControl"] {
     display: flex !important;
     visibility: visible !important;
@@ -306,119 +319,75 @@ section[data-testid="stSidebarUserContent"] ~ div > div:last-child { display: no
     box-shadow: 0 2px 12px rgba(0,0,0,0.5) !important;
     transition: background 0.15s !important;
 }
-[data-testid="collapsedControl"]:hover {
-    background: #252525 !important;
-}
-[data-testid="collapsedControl"] svg {
-    color: #e8e8e8 !important;
-    width: 16px !important;
-    height: 16px !important;
-}
-/* On mobile — sidebar overlays, doesn't push content */
-@media (max-width: 768px) {
-    [data-testid="stSidebar"] {
-        position: fixed !important;
-        z-index: 9998 !important;
-        height: 100vh !important;
-        box-shadow: 4px 0 24px rgba(0,0,0,0.6) !important;
-    }
-}
+[data-testid="collapsedControl"]:hover { background: #252525 !important; }
+[data-testid="collapsedControl"] svg { color: #e8e8e8 !important; width: 16px !important; height: 16px !important; }
 
-/* ── Smaller refresh button in channel detail ── */
-.refresh-btn-wrap .stButton > button {
-    font-size: 11px !important;
-    padding: 6px 12px !important;
-    font-weight: 500 !important;
+/* Persistent sidebar-open tab on the left edge when sidebar is collapsed */
+#sidebar-reopen-tab {
+    position: fixed;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    z-index: 9998;
+    background: #1a1a1a;
+    border: 1px solid #2e2e2e;
+    border-left: none;
+    border-radius: 0 8px 8px 0;
+    padding: 14px 6px;
+    cursor: pointer;
+    box-shadow: 2px 0 12px rgba(0,0,0,0.4);
+    transition: background 0.15s, opacity 0.2s;
+    writing-mode: vertical-rl;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    color: #737373;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    display: none; /* shown via JS when collapsed */
 }
+#sidebar-reopen-tab:hover { background: #252525; color: #e8e8e8; }
 
 /* ── YouTube Studio style stat bubbles ── */
 .yt-bubble-row {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    margin-bottom: 20px;
+    display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px;
 }
 .yt-bubble {
-    background: var(--bg-3);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 16px 20px;
-    flex: 1 1 140px;
-    min-width: 130px;
-    transition: border-color 0.2s, background 0.2s;
-    cursor: default;
+    background: var(--bg-3); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 20px; flex: 1 1 140px; min-width: 130px;
+    transition: border-color 0.2s, background 0.2s; cursor: default;
 }
-.yt-bubble:hover {
-    background: var(--bg-4);
-    border-color: var(--border-2);
-}
-.yt-bubble-label {
-    font-family: var(--font-mono);
-    font-size: 9px;
-    font-weight: 600;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 1.2px;
-    margin-bottom: 8px;
-}
-.yt-bubble-value {
-    font-size: 26px;
-    font-weight: 700;
-    color: #fff;
-    letter-spacing: -0.5px;
-    line-height: 1;
-    margin-bottom: 4px;
-}
-.yt-bubble-sub {
-    font-size: 11px;
-    color: var(--text-muted);
-}
+.yt-bubble:hover { background: var(--bg-4); border-color: var(--border-2); }
+.yt-bubble-label { font-family: var(--font-mono); font-size: 9px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 8px; }
+.yt-bubble-value { font-size: 26px; font-weight: 700; color: #fff; letter-spacing: -0.5px; line-height: 1; margin-bottom: 4px; }
+.yt-bubble-sub { font-size: 11px; color: var(--text-muted); }
 .yt-bubble-red   { border-left: 3px solid var(--red); }
 .yt-bubble-blue  { border-left: 3px solid var(--blue); }
 .yt-bubble-green { border-left: 3px solid var(--green); }
 .yt-bubble-grey  { border-left: 3px solid #444; }
+.yt-bubble-gold  { border-left: 3px solid #f5a623; }
+.yt-bubble-active { border-color: var(--red) !important; background: rgba(255,0,51,0.06) !important; }
 
 /* ── Mobile responsive ── */
 @media (max-width: 768px) {
-    /* Tighter padding */
     .main .block-container { padding: 1rem 1rem 3rem !important; }
-
-    /* Sidebar full width when open */
-    [data-testid="stSidebar"] { min-width: 85vw !important; }
-
-    /* Stack metric cards */
+    [data-testid="stSidebar"] { min-width: 85vw !important; position: fixed !important; z-index: 9998 !important; height: 100vh !important; box-shadow: 4px 0 24px rgba(0,0,0,0.6) !important; }
     [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: 8px !important; }
     [data-testid="metric-container"] { min-width: 140px !important; flex: 1 1 140px !important; padding: 14px 16px !important; }
     [data-testid="stMetricValue"] { font-size: 22px !important; }
-
-    /* Tabs — scrollable, smaller text */
     [data-testid="stTabs"] [role="tablist"] { overflow-x: auto !important; flex-wrap: nowrap !important; -webkit-overflow-scrolling: touch; }
     [data-testid="stTabs"] button[role="tab"] { padding: 10px 14px !important; font-size: 12px !important; white-space: nowrap; }
-
-    /* Video table — collapse less important cols, shrink thumbnail */
-    .vid-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     .vid-thumb-cell { width: 80px !important; }
     .vid-thumb-cell img, .vid-thumb-cell div { width: 80px !important; height: 45px !important; }
     .vid-col-hide { display: none !important; }
-
-    /* Charts full width */
     [data-testid="stPlotlyChart"] { width: 100% !important; }
-
-    /* Page header stack */
     .page-header { flex-direction: column !important; gap: 8px !important; }
-
-    /* Buttons full width on mobile */
     .stButton > button { width: 100% !important; }
-
-    /* Folder buttons */
     .ch-pill { padding: 6px 8px !important; }
     .ch-name { font-size: 11px !important; }
-
-    /* Alert boxes */
     .alert { flex-direction: column !important; gap: 6px !important; }
-
-    /* AI response */
-    .ai-response { padding: 14px 14px !important; }
+    .time-bar { gap: 6px; padding: 8px 10px; }
+    .yt-bubble-value { font-size: 20px !important; }
 }
 
 @media (max-width: 480px) {
@@ -427,22 +396,80 @@ section[data-testid="stSidebarUserContent"] ~ div > div:last-child { display: no
     h1 { font-size: 18px !important; }
     [data-testid="stTabs"] button[role="tab"] { padding: 8px 10px !important; font-size: 11px !important; }
 }
+
+/* ── Refresh btn smaller ── */
+.refresh-btn-wrap .stButton > button { font-size: 11px !important; padding: 6px 12px !important; font-weight: 500 !important; }
 </style>
 """, unsafe_allow_html=True)
 
+# ── Persistent sidebar reopen tab (JS) ────────────────────────
+# Watches for sidebar collapsed state and shows/hides the tab
+components.html("""
+<div id="sidebar-reopen-tab" onclick="reopenSidebar()">☰ Menu</div>
+<script>
+(function() {
+    function reopenSidebar() {
+        // Click the collapsed control button that Streamlit renders
+        var btn = window.parent.document.querySelector('[data-testid="collapsedControl"]');
+        if (btn) btn.click();
+    }
+    window.reopenSidebar = reopenSidebar;
+
+    function checkSidebarState() {
+        var sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+        var tab = document.getElementById('sidebar-reopen-tab');
+        if (!sidebar || !tab) return;
+        // Streamlit adds aria-expanded="false" when collapsed
+        var isCollapsed = sidebar.getAttribute('aria-expanded') === 'false' ||
+                          sidebar.style.display === 'none' ||
+                          sidebar.offsetWidth < 50;
+        tab.style.display = isCollapsed ? 'block' : 'none';
+    }
+
+    // Poll — sidebar state changes don't fire a simple event
+    setInterval(checkSidebarState, 400);
+    checkSidebarState();
+})();
+</script>
+<style>
+#sidebar-reopen-tab {
+    position: fixed; top: 50%; left: 0; transform: translateY(-50%);
+    z-index: 99999; background: #1a1a1a;
+    border: 1px solid #2e2e2e; border-left: none;
+    border-radius: 0 8px 8px 0; padding: 14px 7px;
+    cursor: pointer; box-shadow: 2px 0 12px rgba(0,0,0,0.5);
+    writing-mode: vertical-rl;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 700; color: #737373;
+    letter-spacing: 1.5px; text-transform: uppercase;
+    display: none; transition: background 0.15s, color 0.15s;
+}
+#sidebar-reopen-tab:hover { background: #252525; color: #e8e8e8; }
+</style>
+""", height=0)
+
+
 # ─────────────────────────────────────────────────────────────
-# PLOTLY THEME
+# PLOTLY THEME — responsive helper
 # ─────────────────────────────────────────────────────────────
 PLOTLY = dict(
     paper_bgcolor="#0a0a0a",
     plot_bgcolor="#111111",
-    font=dict(family="Instrument Sans", color="#737373", size=12),
-    xaxis=dict(gridcolor="#1e1e1e", zerolinecolor="#252525", linecolor="#252525"),
-    yaxis=dict(gridcolor="#1e1e1e", zerolinecolor="#252525", linecolor="#252525"),
-    margin=dict(l=16, r=16, t=44, b=16),
-    title_font=dict(size=14, color="#e8e8e8", family="Instrument Sans"),
-    legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor="#252525"),
+    font=dict(family="Instrument Sans", color="#737373", size=11),
+    xaxis=dict(gridcolor="#1e1e1e", zerolinecolor="#252525", linecolor="#252525",
+               tickfont=dict(size=10), automargin=True),
+    yaxis=dict(gridcolor="#1e1e1e", zerolinecolor="#252525", linecolor="#252525",
+               tickfont=dict(size=10), automargin=True),
+    margin=dict(l=10, r=10, t=44, b=40),
+    title_font=dict(size=13, color="#e8e8e8", family="Instrument Sans"),
+    legend=dict(bgcolor="rgba(0,0,0,0)", bordercolor="#252525", font=dict(size=11)),
+    autosize=True,
 )
+
+def plotly_cfg():
+    """Responsive config for st.plotly_chart."""
+    return {"responsive": True, "displayModeBar": False}
+
 
 # ─────────────────────────────────────────────────────────────
 # DATABASE
@@ -477,18 +504,12 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT, channel_name TEXT NOT NULL,
             snapshot_date TEXT NOT NULL, subscribers INTEGER DEFAULT 0, total_views INTEGER DEFAULT 0,
             UNIQUE(channel_name, snapshot_date))""")
-        db.execute("""CREATE TABLE IF NOT EXISTS folders (
-            name TEXT PRIMARY KEY)""")
+        db.execute("""CREATE TABLE IF NOT EXISTS folders (name TEXT PRIMARY KEY)""")
         db.execute("""CREATE TABLE IF NOT EXISTS folder_channels (
-            folder_name TEXT NOT NULL,
-            channel_name TEXT NOT NULL,
+            folder_name TEXT NOT NULL, channel_name TEXT NOT NULL,
             PRIMARY KEY (folder_name, channel_name))""")
-        # Migrate: strip any time component from existing snapshot dates
-        db.execute("""
-            UPDATE snapshots
-            SET snapshot_date = substr(snapshot_date, 1, 10)
-            WHERE length(snapshot_date) > 10
-        """)
+        db.execute("""UPDATE snapshots SET snapshot_date = substr(snapshot_date, 1, 10)
+            WHERE length(snapshot_date) > 10""")
 
 def load_channels_from_db() -> dict:
     channels = {}
@@ -539,9 +560,7 @@ def delete_channel_from_db(name):
         db.execute("DELETE FROM videos WHERE channel_name=?", (name,))
         db.execute("DELETE FROM folder_channels WHERE channel_name=?", (name,))
 
-# ── Folder helpers ──────────────────────────────────────────
 def load_folders_from_db() -> dict:
-    """Returns {folder_name: [channel_name, ...]}"""
     folders = {}
     with get_db() as db:
         frows = db.execute("SELECT name FROM folders ORDER BY name").fetchall()
@@ -573,9 +592,7 @@ def remove_channel_from_folder_db(folder_name: str, channel_name: str):
                    (folder_name, channel_name))
 
 def save_snapshot_to_db(channel_name, subscribers, total_views):
-    """Save snapshot to SQLite AND into channel_stats JSON (survives /tmp resets)."""
     today = datetime.now().strftime("%Y-%m-%d")
-    # SQLite
     try:
         with get_db() as db:
             db.execute("""INSERT INTO snapshots (channel_name,snapshot_date,subscribers,total_views)
@@ -584,7 +601,6 @@ def save_snapshot_to_db(channel_name, subscribers, total_views):
                 (channel_name, today, subscribers, total_views))
     except Exception:
         pass
-    # Also persist inside channel_stats so it survives restarts
     if channel_name in st.session_state.channels:
         stats = st.session_state.channels[channel_name].get("channel_stats", {})
         history = stats.get("snapshot_history", {})
@@ -593,9 +609,7 @@ def save_snapshot_to_db(channel_name, subscribers, total_views):
         st.session_state.channels[channel_name]["channel_stats"] = stats
 
 def load_snapshots_from_db(channel_name) -> pd.DataFrame:
-    """Load snapshots — merge SQLite rows with JSON history for resilience."""
     rows = {}
-    # 1. Try SQLite
     try:
         with get_db() as db:
             db_rows = db.execute(
@@ -606,7 +620,6 @@ def load_snapshots_from_db(channel_name) -> pd.DataFrame:
             rows[date_str] = {"subscribers": r["subscribers"], "total_views": r["total_views"]}
     except Exception:
         pass
-    # 2. Merge JSON history (catches data lost from /tmp resets)
     if channel_name in st.session_state.get("channels", {}):
         stats = st.session_state.channels[channel_name].get("channel_stats", {})
         for date_str, vals in stats.get("snapshot_history", {}).items():
@@ -648,7 +661,6 @@ def fetch_channel_data(api_key: str, channel_id: str):
         "description":   ch["snippet"].get("description", "")[:300],
     }
     uploads_id = ch["contentDetails"]["relatedPlaylists"]["uploads"]
-
     videos, next_page = [], None
     for _ in range(2):
         pl = youtube.playlistItems().list(
@@ -683,7 +695,6 @@ def fetch_channel_data(api_key: str, channel_id: str):
     return df, stats
 
 def lookup_channel_name(api_key: str, channel_id: str) -> str:
-    """Fetch just the channel title — cheap single API call."""
     youtube = build("youtube", "v3", developerKey=api_key)
     resp = youtube.channels().list(part="snippet", id=channel_id).execute()
     if not resp.get("items"):
@@ -692,48 +703,38 @@ def lookup_channel_name(api_key: str, channel_id: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────
-# CLAUDE AI
+# TIME FILTER HELPERS
 # ─────────────────────────────────────────────────────────────
-def generate_ai_ideas(anthropic_key: str, channel_name: str, df: pd.DataFrame, channel_desc: str = "") -> str:
-    client = anthropic.Anthropic(api_key=anthropic_key)
-    top_titles    = df.nlargest(15, "Views")["Title"].tolist()
-    recent_titles = df.nlargest(10, "Views per Day")["Title"].tolist()
-    avg_views = int(df["Views"].mean())
-    day_col = df.copy(); day_col["Day"] = day_col["Published"].dt.day_name()
-    best_day = day_col.groupby("Day")["Views"].mean().idxmax() if len(day_col) > 6 else "unknown"
+TIME_PRESETS = {
+    "7 Days":   7,
+    "30 Days":  30,
+    "90 Days":  90,
+    "6 Months": 180,
+    "12 Months":365,
+    "All Time": 0,
+}
 
-    prompt = f"""You are a YouTube growth strategist analyzing a channel called "{channel_name}".
+def apply_time_filter(df: pd.DataFrame, preset: str,
+                      custom_start=None, custom_end=None) -> pd.DataFrame:
+    """Filter a video DataFrame by the selected time preset or custom range."""
+    if df is None or df.empty or "Published" not in df.columns:
+        return df
+    if preset == "Custom" and custom_start and custom_end:
+        start = pd.Timestamp(custom_start)
+        end   = pd.Timestamp(custom_end) + pd.Timedelta(days=1)
+        return df[(df["Published"] >= start) & (df["Published"] < end)]
+    if preset == "Month" and custom_start:
+        # custom_start is a (year, month) tuple
+        year, month = custom_start
+        start = pd.Timestamp(year=year, month=month, day=1)
+        end   = (start + pd.offsets.MonthEnd(1)) + pd.Timedelta(days=1)
+        return df[(df["Published"] >= start) & (df["Published"] < end)]
+    days = TIME_PRESETS.get(preset, 0)
+    if days == 0:
+        return df
+    cutoff = pd.Timestamp(datetime.now() - timedelta(days=days))
+    return df[df["Published"] >= cutoff]
 
-Channel overview:
-- Average views per video: {avg_views:,}
-- Best performing upload day: {best_day}
-- Channel description: {channel_desc or "Not provided"}
-
-Top 15 videos by views:
-{chr(10).join(f"• {t}" for t in top_titles)}
-
-Top 10 videos by momentum (views/day):
-{chr(10).join(f"• {t}" for t in recent_titles)}
-
-Based on this data, provide:
-
-1. **Niche & Audience Analysis** (2-3 sentences on what's working and why)
-
-2. **6 High-Potential Video Ideas** — each with:
-   - A compelling, specific title
-   - Why it will perform based on the patterns you see
-   - Best format (long-form, short, series episode, etc.)
-
-3. **One Series Concept** — a multi-part series that could drive sustained subscriber growth
-
-4. **One Contrarian Opportunity** — something this channel is NOT doing that could outperform current content
-
-Be specific, strategic, and data-driven. Reference actual patterns from the titles."""
-
-    msg = client.messages.create(
-        model="claude-haiku-4-5-20251001", max_tokens=1400,
-        messages=[{"role": "user", "content": prompt}])
-    return msg.content[0].text
 
 # ─────────────────────────────────────────────────────────────
 # UTILITIES
@@ -766,67 +767,52 @@ def detect_alerts(channels: dict) -> list:
                                    "title": ev.iloc[0]["Title"], "vpd": ev.iloc[0]["Views per Day"]})
     return alerts
 
-def get_badge(row) -> str:
-    if row["Days Since Publish"] <= 14: return '<span class="vbadge badge-new">NEW</span>'
-    if row["Views per Day"] >= 500:     return '<span class="vbadge badge-hot">HOT</span>'
-    if row["Days Since Publish"] >= 90 and row["Views per Day"] >= 100:
-        return '<span class="vbadge badge-ever">EVERGREEN</span>'
-    return ""
-
-def sanitize(text: str) -> str:
-    """Escape HTML special chars. Emojis are kept but encoded safely."""
-    import html
-    return html.escape(str(text), quote=True)
-
-def render_video_grid(df: pd.DataFrame, page: int = 0, per_page: int = 15):
-    render_thumb_table(df.iloc[page*per_page:(page+1)*per_page].reset_index(drop=True))
-
 def render_thumb_table(df: pd.DataFrame, show_channel: bool = False, height: int = 600):
-    """Render video table inside a self-contained iframe via components.html — immune to Streamlit HTML escaping."""
     import html as _h
     rows = ""
     for _, row in df.iterrows():
         badge_map = {"NEW": ("#1e8fff","#0d3a6e"), "HOT": ("#ff0033","#3a0010"), "EVERGREEN": ("#1db954","#0a2e1a")}
         b_text = ""
-        if row.get("Days Since Publish",999) <= 14:          b_text = "NEW"
-        elif row.get("Views per Day", 0) >= 500:              b_text = "HOT"
-        elif row.get("Days Since Publish",0) >= 90 and row.get("Views per Day",0) >= 100: b_text = "EVERGREEN"
+        if row.get("Days Since Publish", 999) <= 14:       b_text = "NEW"
+        elif row.get("Views per Day", 0) >= 500:            b_text = "HOT"
+        elif row.get("Days Since Publish", 0) >= 90 and row.get("Views per Day", 0) >= 100: b_text = "EVERGREEN"
         badge_html = (f'<span style="background:{badge_map[b_text][1]};color:{badge_map[b_text][0]};border:1px solid {badge_map[b_text][0]};padding:2px 7px;border-radius:3px;font-size:9px;font-weight:700;letter-spacing:0.5px;font-family:monospace;margin-right:4px">{b_text}</span>' if b_text else "")
-        thumb_url = _h.escape(str(row.get("Thumbnail","")))
-        url       = _h.escape(str(row.get("URL","#")))
-        title     = _h.escape(str(row.get("Title","")))
+        thumb_url = _h.escape(str(row.get("Thumbnail", "")))
+        url       = _h.escape(str(row.get("URL", "#")))
+        title     = _h.escape(str(row.get("Title", "")))
         pub       = row["Published"].strftime("%Y-%m-%d") if pd.notna(row.get("Published")) else "—"
         ch_html   = (f'<div style="font-size:10px;color:#ff0033;font-weight:700;margin-bottom:2px">{_h.escape(str(row.get("Channel","")))}</div>' if show_channel and row.get("Channel") else "")
         thumb_el  = (f'<img src="{thumb_url}" style="width:120px;height:68px;object-fit:cover;border-radius:5px;display:block" loading="lazy">' if thumb_url else '<div style="width:120px;height:68px;background:#1f1f1f;border-radius:5px;display:flex;align-items:center;justify-content:center;color:#444;font-size:18px">▶</div>')
-        views     = fmt(int(row.get("Views",0)))
-        likes     = fmt(int(row.get("Likes",0)))
-        comments  = fmt(int(row.get("Comments",0)))
-        vpd       = f'{row.get("Views per Day",0):.1f}'
-        lr        = f'{row.get("Like Rate %",0):.2f}%'
-        cr        = f'{row.get("Comment Rate %",0):.2f}%'
-        days      = str(int(row.get("Days Since Publish",0)))
+        views    = fmt(int(row.get("Views", 0)))
+        likes    = fmt(int(row.get("Likes", 0)))
+        comments = fmt(int(row.get("Comments", 0)))
+        vpd      = f'{row.get("Views per Day", 0):.1f}'
+        lr       = f'{row.get("Like Rate %", 0):.2f}%'
+        cr       = f'{row.get("Comment Rate %", 0):.2f}%'
+        days     = str(int(row.get("Days Since Publish", 0)))
         rows += f"""
         <tr class="vrow">
           <td style="padding:8px 10px;width:136px;min-width:120px"><a href="{url}" target="_blank">{thumb_el}</a></td>
-          <td style="padding:8px 12px;min-width:200px;max-width:360px">
+          <td style="padding:8px 12px;min-width:180px;max-width:340px">
             {ch_html}
             <div style="font-size:13px;font-weight:600;color:#e8e8e8;line-height:1.4;margin-bottom:3px">{title}</div>
             <div style="font-size:11px;color:#737373;margin-bottom:4px">{pub} &nbsp;·&nbsp; {days}d ago</div>
             {badge_html}<a href="{url}" target="_blank" style="color:#ff0033;font-size:10px;font-weight:700;text-decoration:none;letter-spacing:0.3px">WATCH ↗</a>
           </td>
           <td class="num">{views}</td>
-          <td class="num">{likes}</td>
-          <td class="num">{comments}</td>
+          <td class="num num-hide">{likes}</td>
+          <td class="num num-hide">{comments}</td>
           <td class="num">{vpd}</td>
-          <td class="num">{lr}</td>
-          <td class="num">{cr}</td>
+          <td class="num num-hide">{lr}</td>
+          <td class="num num-hide">{cr}</td>
         </tr>"""
 
     html_doc = f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
       *{{box-sizing:border-box;margin:0;padding:0}}
-      body{{background:#0a0a0a;font-family:'Instrument Sans',system-ui,sans-serif;color:#e8e8e8}}
-      table{{width:100%;border-collapse:collapse;font-size:13px}}
+      body{{background:#0a0a0a;font-family:'Instrument Sans',system-ui,sans-serif;color:#e8e8e8;overflow-x:auto}}
+      table{{width:100%;border-collapse:collapse;font-size:13px;min-width:480px}}
       thead tr{{background:#181818;position:sticky;top:0;z-index:10}}
       th{{padding:10px 12px;text-align:right;font-size:9px;font-weight:700;color:#4a4a4a;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #252525;white-space:nowrap}}
       th:nth-child(1),th:nth-child(2){{text-align:left}}
@@ -836,12 +822,19 @@ def render_thumb_table(df: pd.DataFrame, show_channel: bool = False, height: int
       ::-webkit-scrollbar{{width:4px;height:4px}}
       ::-webkit-scrollbar-track{{background:#0a0a0a}}
       ::-webkit-scrollbar-thumb{{background:#2a2a2a;border-radius:2px}}
+      @media(max-width:600px){{
+        .num-hide{{display:none}}
+        th.th-hide{{display:none}}
+        table{{min-width:340px}}
+      }}
     </style></head><body>
     <table>
       <thead><tr>
         <th>Thumb</th><th>Title</th>
-        <th>Views</th><th>Likes</th><th>Comments</th>
-        <th>Views/Day</th><th>Like Rate</th><th>Comment Rate</th>
+        <th>Views</th>
+        <th class="th-hide">Likes</th><th class="th-hide">Comments</th>
+        <th>Views/Day</th>
+        <th class="th-hide">Like Rate</th><th class="th-hide">Comment Rate</th>
       </tr></thead>
       <tbody>{rows}</tbody>
     </table>
@@ -849,12 +842,12 @@ def render_thumb_table(df: pd.DataFrame, show_channel: bool = False, height: int
 
     components.html(html_doc, height=height, scrolling=True)
 
+
 # ─────────────────────────────────────────────────────────────
 # INIT
 # ─────────────────────────────────────────────────────────────
 init_db()
 
-# ── Pre-seeded channels & folders — auto-inserted if not already in DB ──
 SEED_DATA = {
     "Angel Studios": [
         ("UCb02Js81Etta5BgML6jK-fQ", "Angel Studios"),
@@ -872,7 +865,6 @@ SEED_DATA = {
 }
 
 def seed_channels_and_folders():
-    """Insert preset channels/folders if they don't already exist in DB."""
     existing_ids = set()
     with get_db() as db:
         rows = db.execute("SELECT channel_id FROM channels").fetchall()
@@ -881,7 +873,6 @@ def seed_channels_and_folders():
         save_folder_to_db(folder_name)
         for ch_id, placeholder_name in channels:
             if ch_id not in existing_ids:
-                # Use placeholder name — will be replaced on first refresh
                 actual_name = placeholder_name
                 suffix = 1
                 with get_db() as db:
@@ -898,16 +889,21 @@ if "channels" not in st.session_state:
     st.session_state.channels = load_channels_from_db()
 if "api_key" not in st.session_state:
     st.session_state.api_key = get_secret("YOUTUBE_API_KEY")
-if "anthropic_key" not in st.session_state:
-    st.session_state.anthropic_key = get_secret("ANTHROPIC_API_KEY")
-if "ideas_cache" not in st.session_state:
-    st.session_state.ideas_cache = {}
 if "folders" not in st.session_state:
     st.session_state.folders = load_folders_from_db()
 if "active_folder" not in st.session_state:
     st.session_state.active_folder = None
 if "bubble_chart" not in st.session_state:
-    st.session_state.bubble_chart = None  # which stat chart to show
+    st.session_state.bubble_chart = None
+# Time filter state
+if "time_preset" not in st.session_state:
+    st.session_state.time_preset = "All Time"
+if "time_custom_start" not in st.session_state:
+    st.session_state.time_custom_start = None
+if "time_custom_end" not in st.session_state:
+    st.session_state.time_custom_end = None
+if "time_month_year" not in st.session_state:
+    st.session_state.time_month_year = None   # (year, month) tuple
 
 # ─────────────────────────────────────────────────────────────
 # SIDEBAR
@@ -920,13 +916,50 @@ with st.sidebar:
             <div class="brand-sub">Media Monitor</div>
         </div></div>""", unsafe_allow_html=True)
 
-    with st.expander("🔑  API Keys", expanded=not st.session_state.api_key):
-        yt_key  = st.text_input("YouTube Data API Key",  value=st.session_state.api_key,  type="password", placeholder="AIza...")
-        ant_key = st.text_input("Anthropic API Key",     value=st.session_state.anthropic_key, type="password", placeholder="sk-ant-...")
-        if st.button("Save Keys", use_container_width=True):
-            st.session_state.api_key      = yt_key
-            st.session_state.anthropic_key = ant_key
+    with st.expander("🔑  API Key", expanded=not st.session_state.api_key):
+        yt_key = st.text_input("YouTube Data API Key", value=st.session_state.api_key, type="password", placeholder="AIza...")
+        if st.button("Save Key", use_container_width=True):
+            st.session_state.api_key = yt_key
             st.success("Saved.")
+
+    # ── Time Filter ───────────────────────────────────────────
+    st.markdown('<div class="section-label" style="margin-top:16px">Time Filter</div>', unsafe_allow_html=True)
+
+    preset_options = list(TIME_PRESETS.keys()) + ["Month", "Custom"]
+    cur_preset = st.session_state.time_preset
+    preset_cols = st.columns(2)
+    for i, p in enumerate(preset_options):
+        col = preset_cols[i % 2]
+        is_active = (cur_preset == p)
+        btn_type = "primary" if is_active else "secondary"
+        if col.button(p, key=f"tp_{p}", type=btn_type, use_container_width=True):
+            st.session_state.time_preset = p
+            st.session_state.time_custom_start = None
+            st.session_state.time_custom_end = None
+            st.session_state.time_month_year = None
+            st.rerun()
+
+    if st.session_state.time_preset == "Month":
+        now = datetime.now()
+        year_sel  = st.selectbox("Year",  list(range(now.year, now.year - 6, -1)), key="tf_year")
+        month_sel = st.selectbox("Month", list(range(1, 13)), index=now.month - 1,
+                                 format_func=lambda m: datetime(2000, m, 1).strftime("%B"), key="tf_month")
+        st.session_state.time_month_year = (year_sel, month_sel)
+
+    if st.session_state.time_preset == "Custom":
+        d_start = st.date_input("From", value=datetime.now() - timedelta(days=90), key="tf_cs")
+        d_end   = st.date_input("To",   value=datetime.now(), key="tf_ce")
+        st.session_state.time_custom_start = d_start
+        st.session_state.time_custom_end   = d_end
+
+    # Active filter badge
+    active_filter_label = st.session_state.time_preset
+    if active_filter_label == "Month" and st.session_state.time_month_year:
+        y, m = st.session_state.time_month_year
+        active_filter_label = f"{datetime(y, m, 1).strftime('%b')} {y}"
+    elif active_filter_label == "Custom" and st.session_state.time_custom_start:
+        active_filter_label = f"{st.session_state.time_custom_start} → {st.session_state.time_custom_end}"
+    st.markdown(f'<div style="text-align:center;margin:8px 0 4px;font-family:monospace;font-size:10px;color:#ff6680">● Showing: {active_filter_label}</div>', unsafe_allow_html=True)
 
     # ── Folder filter ──────────────────────────────────────────
     if st.session_state.folders:
@@ -935,12 +968,10 @@ with st.sidebar:
         active_label = st.session_state.active_folder or "All Channels"
         for fname in folder_options:
             is_active = (fname == active_label)
-            btn_style = "primary" if is_active else "secondary"
-            if st.button(fname, key=f"folder_btn_{fname}", type=btn_style, use_container_width=True):
+            if st.button(fname, key=f"folder_btn_{fname}", type="primary" if is_active else "secondary", use_container_width=True):
                 st.session_state.active_folder = None if fname == "All Channels" else fname
                 st.rerun()
 
-    # ── Active channel list (filtered by folder) ────────────────
     af = st.session_state.active_folder
     if af and af in st.session_state.folders:
         visible_channels = {k: v for k, v in st.session_state.channels.items()
@@ -973,7 +1004,6 @@ with st.sidebar:
                                 "id": cid, "data": None, "channel_stats": {},
                                 "last_refreshed": "Never", "notes": "", "ideas": {}}
                             save_channel_to_db(ch_name, cid, {}, None, "Never")
-                            # Auto-add to active folder if one is selected
                             if st.session_state.active_folder:
                                 add_channel_to_folder_db(st.session_state.active_folder, ch_name)
                                 st.session_state.folders[st.session_state.active_folder].append(ch_name)
@@ -983,7 +1013,6 @@ with st.sidebar:
                             st.error(f"Could not find channel: {e}")
 
     with st.expander("📁  Manage Folders"):
-        # Create new folder
         new_folder_name = st.text_input("New folder name", placeholder="Client Name")
         if st.button("Create Folder", use_container_width=True):
             if new_folder_name.strip():
@@ -995,7 +1024,6 @@ with st.sidebar:
                     st.rerun()
                 else:
                     st.error("Folder already exists.")
-        # Assign channel to folder
         if st.session_state.folders and st.session_state.channels:
             st.markdown("---")
             assign_ch = st.selectbox("Channel", list(st.session_state.channels.keys()), key="assign_ch")
@@ -1015,7 +1043,6 @@ with st.sidebar:
                     st.session_state.folders[assign_f].remove(assign_ch)
                     st.success("Removed.")
                     st.rerun()
-        # Delete folder
         if st.session_state.folders:
             st.markdown("---")
             del_f = st.selectbox("Delete folder", list(st.session_state.folders.keys()), key="del_f")
@@ -1030,10 +1057,10 @@ with st.sidebar:
         for ch_name in list(visible_channels.keys()):
             info  = st.session_state.channels[ch_name]
             stats = info.get("channel_stats", {})
-            subs_str = fmt(stats.get("subscribers",0)) if stats.get("subscribers") else "—"
+            subs_str = fmt(stats.get("subscribers", 0)) if stats.get("subscribers") else "—"
             has_data = info.get("data") is not None
             dot_cls  = "ch-dot" if has_data else "ch-dot ch-dot-empty"
-            c1, c2 = st.columns([5,1])
+            c1, c2 = st.columns([5, 1])
             c1.markdown(f"""<div class="ch-pill">
                 <div class="{dot_cls}"></div>
                 <div class="ch-info">
@@ -1048,19 +1075,18 @@ with st.sidebar:
         st.divider()
         if st.session_state.api_key:
             refresh_label = f"↺  Refresh {af}" if af else "↺  Refresh All"
-            refresh_targets = visible_channels
             if st.button(refresh_label, type="primary", use_container_width=True):
                 errors = []
                 prog = st.progress(0, text="Refreshing...")
-                total = len(refresh_targets)
+                total = len(visible_channels)
                 fetch_channel_data.clear()
-                for i, (ch_name, info) in enumerate(refresh_targets.items()):
+                for i, (ch_name, info) in enumerate(visible_channels.items()):
                     try:
                         df, stats = fetch_channel_data(st.session_state.api_key, info["id"])
                         ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-                        st.session_state.channels[ch_name].update({"data":df,"channel_stats":stats,"last_refreshed":ts})
-                        save_channel_to_db(ch_name, info["id"], stats, df, ts, info.get("notes",""), info.get("ideas",{}))
-                        prog.progress((i+1)/total, text=f"Done: {ch_name}")
+                        st.session_state.channels[ch_name].update({"data": df, "channel_stats": stats, "last_refreshed": ts})
+                        save_channel_to_db(ch_name, info["id"], stats, df, ts, info.get("notes", ""), info.get("ideas", {}))
+                        prog.progress((i + 1) / total, text=f"Done: {ch_name}")
                     except Exception as e:
                         errors.append(f"{ch_name}: {e}")
                 prog.empty()
@@ -1088,27 +1114,53 @@ if not st.session_state.channels:
     st.stop()
 
 # ─────────────────────────────────────────────────────────────
-# ACTIVE FILTER — channels visible in main area
+# ACTIVE CHANNEL FILTER
 # ─────────────────────────────────────────────────────────────
 _af = st.session_state.active_folder
 if _af and _af in st.session_state.folders:
     view_channels = {k: v for k, v in st.session_state.channels.items()
                      if k in st.session_state.folders[_af]}
-    folder_label = f"  {_af}  "
 else:
     view_channels = st.session_state.channels
-    folder_label = ""
+
+# ── Build filtered view for current time preset ──────────────
+def get_filtered_df(info: dict) -> pd.DataFrame:
+    """Return a time-filtered copy of a channel's DataFrame."""
+    df = info.get("data")
+    if df is None or df.empty:
+        return df
+    preset = st.session_state.time_preset
+    cs = st.session_state.time_custom_start
+    ce = st.session_state.time_custom_end
+    my = st.session_state.time_month_year
+    if preset == "Month":
+        return apply_time_filter(df, "Month", custom_start=my)
+    elif preset == "Custom":
+        return apply_time_filter(df, "Custom", custom_start=cs, custom_end=ce)
+    else:
+        return apply_time_filter(df, preset)
+
+# ─────────────────────────────────────────────────────────────
+# ACTIVE FILTER BANNER
+# ─────────────────────────────────────────────────────────────
+if st.session_state.time_preset != "All Time":
+    st.markdown(f"""<div style="background:rgba(255,0,51,0.06);border:1px solid rgba(255,0,51,0.2);
+        border-radius:8px;padding:8px 16px;margin-bottom:16px;display:flex;align-items:center;gap:10px">
+        <span style="font-size:12px;color:#ff6680;font-family:monospace;font-weight:700">● FILTERED:</span>
+        <span style="font-size:12px;color:#e8e8e8">{active_filter_label}</span>
+        <span style="font-size:11px;color:#555;margin-left:4px">— Change in sidebar</span>
+    </div>""", unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────
 # MAIN TABS
 # ─────────────────────────────────────────────────────────────
-T_DASH, T_ALL, T_DETAIL, T_AI = st.tabs(["  Dashboard  ","  All Channels  ","  Channel Detail  ","  ✦ AI Ideas  "])
+T_DASH, T_ALL, T_DETAIL = st.tabs(["  Dashboard  ", "  All Channels  ", "  Channel Detail  "])
 
 # ═══════════════════════════════════════════
 # DASHBOARD
 # ═══════════════════════════════════════════
 with T_DASH:
-    _title = f"Dashboard — {_af}" if _af else "Dashboard"
+    _title    = f"Dashboard — {_af}" if _af else "Dashboard"
     _subtitle = f"Showing {len(view_channels)} channels in {_af}" if _af else f"All {len(view_channels)} channels"
     st.markdown(f'''<div class="page-header">
         <div class="page-header-left">
@@ -1139,7 +1191,7 @@ with T_DASH:
         </div>
         <div class="yt-bubble yt-bubble-grey">
             <div class="yt-bubble-label">Active Folder</div>
-            <div class="yt-bubble-value" style="font-size:16px;padding-top:4px">{_af or "All Channels"}</div>
+            <div class="yt-bubble-value" style="font-size:16px;padding-top:4px">{_af or "All"}</div>
             <div class="yt-bubble-sub">current view</div>
         </div>
     </div>''', unsafe_allow_html=True)
@@ -1153,41 +1205,41 @@ with T_DASH:
             if a["type"] == "drop":
                 st.markdown(f"""<div class="alert alert-danger"><div class="alert-icon">📉</div>
                     <div class="alert-body"><div class="alert-title">{a['channel']} — View drop detected</div>
-                    <div class="alert-desc">Avg views down {abs(a['pct']):.0f}% vs prior 30 days. Review upload cadence or title strategy.</div></div></div>""", unsafe_allow_html=True)
+                    <div class="alert-desc">Avg views down {abs(a['pct']):.0f}% vs prior 30 days.</div></div></div>""", unsafe_allow_html=True)
             elif a["type"] == "spike":
                 st.markdown(f"""<div class="alert alert-success"><div class="alert-icon">📈</div>
                     <div class="alert-body"><div class="alert-title">{a['channel']} — Momentum spike</div>
-                    <div class="alert-desc">Avg views up {a['pct']:.0f}% vs prior 30 days. Double down on what's working.</div></div></div>""", unsafe_allow_html=True)
+                    <div class="alert-desc">Avg views up {a['pct']:.0f}% vs prior 30 days.</div></div></div>""", unsafe_allow_html=True)
             elif a["type"] == "evergreen":
                 st.markdown(f"""<div class="alert alert-info"><div class="alert-icon">🌿</div>
-                    <div class="alert-body"><div class="alert-title">{a['channel']} — Evergreen asset identified</div>
-                    <div class="alert-desc">"{a['title'][:65]}..." still pulling {a['vpd']:.0f} views/day. Consider promoting it or building a series around it.</div></div></div>""", unsafe_allow_html=True)
+                    <div class="alert-body"><div class="alert-title">{a['channel']} — Evergreen asset</div>
+                    <div class="alert-desc">"{a['title'][:65]}..." still pulling {a['vpd']:.0f} views/day.</div></div></div>""", unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
 
     all_rows = []
     for ch_name, info in view_channels.items():
-        df = info.get("data")
+        df = get_filtered_df(info)
         if df is not None and not df.empty:
-            top = df.nlargest(8,"Views per Day").copy()
+            top = df.nlargest(8, "Views per Day").copy()
             top["Channel"] = ch_name
             all_rows.append(top)
 
     if all_rows:
-        combined = pd.concat(all_rows).nlargest(12,"Views per Day").reset_index(drop=True)
+        combined = pd.concat(all_rows).nlargest(12, "Views per Day").reset_index(drop=True)
         st.markdown('<div class="section-label">Top Videos Right Now — By Momentum</div>', unsafe_allow_html=True)
         render_thumb_table(combined, show_channel=True)
 
         st.markdown("<br><br>", unsafe_allow_html=True)
         all_full = pd.concat(all_rows)
         st.markdown('<div class="section-label">Quick Wins — High Engagement, Low Reach</div>', unsafe_allow_html=True)
-        qw = all_full[all_full["Comment Rate %"] > all_full["Comment Rate %"].quantile(0.7)].nsmallest(4,"Views")
+        qw = all_full[all_full["Comment Rate %"] > all_full["Comment Rate %"].quantile(0.7)].nsmallest(4, "Views")
         for _, row in qw.iterrows():
-            ch = row.get("Channel","")
+            ch = row.get("Channel", "")
             st.markdown(f"""<div class="alert alert-warn"><div class="alert-icon">💡</div>
                 <div class="alert-body"><div class="alert-title">{ch} — {str(row['Title'])[:70]}</div>
                 <div class="alert-desc">{row['Comment Rate %']:.2f}% comment rate with only {fmt(row['Views'])} views — high resonance, low distribution.</div></div></div>""", unsafe_allow_html=True)
     else:
-        st.markdown('<div class="alert alert-info"><div class="alert-icon">ℹ️</div><div class="alert-body"><div class="alert-title">No data loaded</div><div class="alert-desc">Refresh your channels to populate the dashboard.</div></div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="alert alert-info"><div class="alert-icon">ℹ️</div><div class="alert-body"><div class="alert-title">No data for this period</div><div class="alert-desc">Try a wider time range or refresh your channels.</div></div></div>', unsafe_allow_html=True)
 
 # ═══════════════════════════════════════════
 # ALL CHANNELS
@@ -1198,15 +1250,16 @@ with T_ALL:
 
     rows = []
     for ch_name, info in view_channels.items():
-        df = info.get("data"); s = info.get("channel_stats",{})
+        df = get_filtered_df(info)
+        s  = info.get("channel_stats", {})
         rows.append({
             "Channel":         ch_name,
-            "Subscribers":     s.get("subscribers",0),
-            "Total Views":     s.get("total_views",0),
-            "Videos Analyzed": len(df) if df is not None else 0,
+            "Subscribers":     s.get("subscribers", 0),
+            "Total Views":     s.get("total_views", 0),
+            "Videos in Period":len(df) if df is not None and not df.empty else 0,
             "Avg Views":       int(df["Views"].mean()) if df is not None and not df.empty else 0,
-            "Avg Views/Day":   round(df["Views per Day"].mean(),1) if df is not None and not df.empty else 0,
-            "Last Refreshed":  info.get("last_refreshed","Never"),
+            "Avg Views/Day":   round(df["Views per Day"].mean(), 1) if df is not None and not df.empty else 0,
+            "Last Refreshed":  info.get("last_refreshed", "Never"),
         })
 
     if rows:
@@ -1222,28 +1275,37 @@ with T_ALL:
             st.markdown("<br>", unsafe_allow_html=True)
             c1, c2 = st.columns(2)
             with c1:
-                fig = px.bar(summary_df, x="Channel", y="Subscribers", title="Subscribers by Channel",
+                fig = px.bar(summary_df, x="Channel", y="Subscribers",
+                             title="Subscribers by Channel",
                              color="Subscribers", color_continuous_scale=["#1a0000","#ff0033"])
-                fig.update_layout(**PLOTLY, showlegend=False)
+                fig.update_layout(**PLOTLY, showlegend=False, height=320)
                 fig.update_traces(marker_line_width=0)
-                st.plotly_chart(fig, use_container_width=True)
+                fig.update_xaxes(tickangle=-30)
+                st.plotly_chart(fig, use_container_width=True, config=plotly_cfg())
             with c2:
-                fig2 = px.bar(summary_df, x="Channel", y="Avg Views/Day", title="Avg Views/Day by Channel",
+                fig2 = px.bar(summary_df, x="Channel", y="Avg Views/Day",
+                              title="Avg Views/Day by Channel",
                               color="Avg Views/Day", color_continuous_scale=["#001a33","#1e8fff"])
-                fig2.update_layout(**PLOTLY, showlegend=False)
+                fig2.update_layout(**PLOTLY, showlegend=False, height=320)
                 fig2.update_traces(marker_line_width=0)
-                st.plotly_chart(fig2, use_container_width=True)
+                fig2.update_xaxes(tickangle=-30)
+                st.plotly_chart(fig2, use_container_width=True, config=plotly_cfg())
 
 # ═══════════════════════════════════════════
 # CHANNEL DETAIL
 # ═══════════════════════════════════════════
 with T_DETAIL:
-    selected = st.selectbox("Channel", list(view_channels.keys()) if view_channels else list(st.session_state.channels.keys()), label_visibility="collapsed")
-    info     = st.session_state.channels[selected]
-    stats    = info.get("channel_stats",{})
-    ch_df    = info.get("data")
+    selected = st.selectbox(
+        "Channel",
+        list(view_channels.keys()) if view_channels else list(st.session_state.channels.keys()),
+        label_visibility="collapsed"
+    )
+    info   = st.session_state.channels[selected]
+    stats  = info.get("channel_stats", {})
+    ch_df_raw = info.get("data")            # full unfiltered
+    ch_df     = get_filtered_df(info)       # time-filtered
 
-    head_l, head_r = st.columns([5,2])
+    head_l, head_r = st.columns([5, 2])
     with head_l:
         st.markdown(f"""<div style="margin-bottom:4px">
             <h1>{stats.get('channel_name', selected)}</h1>
@@ -1258,7 +1320,7 @@ with T_DETAIL:
                     fetch_channel_data.clear()
                     df_new, stats_new = fetch_channel_data(st.session_state.api_key, info["id"])
                     ts = datetime.now().strftime("%Y-%m-%d %H:%M")
-                    st.session_state.channels[selected].update({"data":df_new,"channel_stats":stats_new,"last_refreshed":ts})
+                    st.session_state.channels[selected].update({"data": df_new, "channel_stats": stats_new, "last_refreshed": ts})
                     save_channel_to_db(selected, info["id"], stats_new, df_new, ts, info.get("notes",""), info.get("ideas",{}))
                     st.success("Done!")
                     st.rerun()
@@ -1268,183 +1330,135 @@ with T_DETAIL:
 
     st.divider()
 
-    if ch_df is None or ch_df.empty:
+    if ch_df_raw is None or ch_df_raw.empty:
         st.markdown('<div class="alert alert-info"><div class="alert-icon">ℹ️</div><div class="alert-body"><div class="alert-title">No data loaded</div><div class="alert-desc">Click Refresh Channel to load video data.</div></div></div>', unsafe_allow_html=True)
         st.stop()
 
-    avg_views     = int(ch_df["Views"].mean())
-    avg_vpd       = ch_df["Views per Day"].mean()
-    top_vid_views = int(ch_df["Views"].max())
-    total_views_ch= int(ch_df["Views"].sum())
-    avg_like_rate = ch_df["Like Rate %"].mean()
-    avg_com_rate  = ch_df["Comment Rate %"].mean()
-    total_likes   = int(ch_df["Likes"].sum())
-    total_comments= int(ch_df["Comments"].sum())
-    # Revenue estimate: YouTube avg RPM ~$2-5, use $3.50 per 1000 views as midpoint
+    # Use filtered df; fall back to full if filter yields nothing
+    working_df = ch_df if (ch_df is not None and not ch_df.empty) else ch_df_raw
+    if ch_df is not None and ch_df.empty and st.session_state.time_preset != "All Time":
+        st.markdown(f'<div class="alert alert-warn"><div class="alert-icon">⚠️</div><div class="alert-body"><div class="alert-title">No videos in this period</div><div class="alert-desc">No uploads found for <b>{active_filter_label}</b>. Showing all-time data below.</div></div></div>', unsafe_allow_html=True)
+
+    avg_views     = int(working_df["Views"].mean())
+    avg_vpd       = working_df["Views per Day"].mean()
+    top_vid_views = int(working_df["Views"].max())
+    total_views_ch= int(working_df["Views"].sum())
+    avg_like_rate = working_df["Like Rate %"].mean()
+    avg_com_rate  = working_df["Comment Rate %"].mean()
+    total_likes   = int(working_df["Likes"].sum())
+    total_comments= int(working_df["Comments"].sum())
     est_revenue_low  = total_views_ch * 1.5 / 1000
     est_revenue_high = total_views_ch * 5.0 / 1000
     rev_str = f"${est_revenue_low/1000:.0f}K–${est_revenue_high/1000:.0f}K" if est_revenue_high >= 1000 else f"${est_revenue_low:.0f}–${est_revenue_high:.0f}"
 
-    # Bubble click buttons — invisible labels under each, using columns
-    b_cols = st.columns(6)
     bubble_defs = [
-        ("subscribers",  "Subscribers",     fmt(stats.get("subscribers",0)), "total subscribers",     "yt-bubble-red"),
-        ("views",        "Channel Views",    fmt(stats.get("total_views",0)), "lifetime views",        "yt-bubble-blue"),
-        ("avg_views",    "Avg Views",        fmt(avg_views),                  "per video",             "yt-bubble-green"),
-        ("revenue",      "Est. Revenue",     rev_str,                         "based on ~$3.50 RPM",   "yt-bubble-gold"),
-        ("engagement",   "Like Rate",        f"{avg_like_rate:.2f}%",         f"avg comment {avg_com_rate:.2f}%", "yt-bubble-grey"),
-        ("videos",       "Videos",           str(len(ch_df)),                 f"top: {fmt(top_vid_views)} views","yt-bubble-grey"),
+        ("subscribers", "Subscribers",  fmt(stats.get("subscribers",0)), "total subscribers",     "yt-bubble-red"),
+        ("views",       "Views",         fmt(total_views_ch),             "in selected period",    "yt-bubble-blue"),
+        ("avg_views",   "Avg Views",     fmt(avg_views),                  "per video",             "yt-bubble-green"),
+        ("revenue",     "Est. Revenue",  rev_str,                         "based on ~$3.50 RPM",   "yt-bubble-gold"),
+        ("engagement",  "Like Rate",     f"{avg_like_rate:.2f}%",         f"comment {avg_com_rate:.2f}%", "yt-bubble-grey"),
+        ("videos",      "Videos",        str(len(working_df)),            f"in period",            "yt-bubble-grey"),
     ]
 
     bubble_html = '<div class="yt-bubble-row">'
     for key, label, value, sub, cls in bubble_defs:
-        active = "yt-bubble-active" if st.session_state.bubble_chart == key else ""
-        bubble_html += f'''<div class="yt-bubble {cls} {active}" id="bubble_{key}">
+        active_cls = "yt-bubble-active" if st.session_state.bubble_chart == key else ""
+        bubble_html += f'''<div class="yt-bubble {cls} {active_cls}">
             <div class="yt-bubble-label">{label}</div>
             <div class="yt-bubble-value">{value}</div>
             <div class="yt-bubble-sub">{sub}</div>
         </div>'''
     bubble_html += '</div>'
-
-    # Add active bubble style
-    st.markdown("""<style>
-    .yt-bubble-active { border-color: var(--red) !important; background: rgba(255,0,51,0.06) !important; }
-    .yt-bubble-gold { border-left: 3px solid #f5a623; }
-    .yt-bubble { cursor: pointer; }
-    </style>""", unsafe_allow_html=True)
     st.markdown(bubble_html, unsafe_allow_html=True)
 
-    # Invisible click buttons below bubbles
     bc = st.columns(6)
-    bubble_keys = [b[0] for b in bubble_defs]
-    bubble_labels = [b[1] for b in bubble_defs]
     for i, (key, label, _, _, _) in enumerate(bubble_defs):
         if bc[i].button(f"↗ {label}", key=f"bub_{selected}_{key}", use_container_width=True):
             st.session_state.bubble_chart = None if st.session_state.bubble_chart == key else key
             st.rerun()
 
-    # Render drill-down chart if bubble selected
+    # ── Drill-down charts ──────────────────────────────────────
     bc_sel = st.session_state.bubble_chart
-    if bc_sel == "subscribers":
-        st.markdown("### Subscriber Context")
-        sub_data = pd.DataFrame({
-            "Video": ch_df["Title"].str[:40],
-            "Views": ch_df["Views"],
-            "Like Rate": ch_df["Like Rate %"],
-        }).nlargest(15, "Views")
-        fig_s = px.bar(sub_data, x="Views", y="Video", orientation="h",
-                       title="Top Videos — Subscriber Drivers",
-                       color="Like Rate", color_continuous_scale=["#1a0000","#ff0033"])
-        fig_s.update_layout(**PLOTLY, height=420); fig_s.update_traces(marker_line_width=0)
-        st.plotly_chart(fig_s, use_container_width=True)
-
-    elif bc_sel == "views":
-        st.markdown("### Views Over Time")
-        vt = ch_df.sort_values("Published")
+    if bc_sel == "views":
+        vt = working_df.sort_values("Published")
         fig_v = go.Figure()
-        fig_v.add_trace(go.Scatter(x=vt["Published"], y=vt["Views"].cumsum(),
+        fig_v.add_trace(go.Scatter(
+            x=vt["Published"], y=vt["Views"].cumsum(),
             mode="lines", line=dict(color="#1e8fff", width=2),
-            fill="tozeroy", fillcolor="rgba(30,143,255,0.06)", name="Cumulative Views"))
-        fig_v.add_trace(go.Bar(x=vt["Published"], y=vt["Views"],
-            marker_color="rgba(30,143,255,0.3)", marker_line_width=0, name="Per Video", yaxis="y"))
+            fill="tozeroy", fillcolor="rgba(30,143,255,0.06)", name="Cumulative"))
+        fig_v.add_trace(go.Bar(
+            x=vt["Published"], y=vt["Views"],
+            marker_color="rgba(30,143,255,0.3)", marker_line_width=0, name="Per Video"))
         fig_v.update_layout(**PLOTLY, title="Views: Per Video + Cumulative", height=360)
-        st.plotly_chart(fig_v, use_container_width=True)
+        st.plotly_chart(fig_v, use_container_width=True, config=plotly_cfg())
 
     elif bc_sel == "avg_views":
-        st.markdown("### Views Distribution")
         fig_hist = go.Figure()
-        fig_hist.add_trace(go.Histogram(x=ch_df["Views"], nbinsx=20,
-            marker_color="#ff0033", marker_line_width=0, opacity=0.8, name="Videos"))
+        fig_hist.add_trace(go.Histogram(x=working_df["Views"], nbinsx=20,
+            marker_color="#ff0033", marker_line_width=0, opacity=0.8))
         fig_hist.add_vline(x=avg_views, line_dash="dash", line_color="#fff",
             annotation_text=f"Avg: {fmt(avg_views)}", annotation_position="top right")
-        fig_hist.update_layout(**PLOTLY, title="Views Distribution Across Videos",
-            xaxis_title="Views", yaxis_title="# Videos", height=340)
-        st.plotly_chart(fig_hist, use_container_width=True)
-        # Views percentiles
-        pct_df = pd.DataFrame({
-            "Percentile": ["Top 10%", "Top 25%", "Median", "Bottom 25%"],
-            "Views": [
-                int(ch_df["Views"].quantile(0.9)), int(ch_df["Views"].quantile(0.75)),
-                int(ch_df["Views"].quantile(0.5)), int(ch_df["Views"].quantile(0.25))
-            ]
-        })
-        st.dataframe(pct_df, use_container_width=True, hide_index=True)
+        fig_hist.update_layout(**PLOTLY, title="Views Distribution",
+            xaxis_title="Views", yaxis_title="# Videos", height=320)
+        st.plotly_chart(fig_hist, use_container_width=True, config=plotly_cfg())
 
     elif bc_sel == "revenue":
-        st.markdown("### Estimated Revenue Breakdown")
-        rev_df = ch_df.nlargest(15,"Views").copy()
-        rev_df["Est Revenue Low"]  = (rev_df["Views"] * 1.5 / 1000).round(0)
-        rev_df["Est Revenue High"] = (rev_df["Views"] * 5.0 / 1000).round(0)
-        rev_df["Est Revenue Mid"]  = (rev_df["Views"] * 3.5 / 1000).round(0)
-        fig_rev = go.Figure()
-        fig_rev.add_trace(go.Bar(
-            x=rev_df["Title"].str[:35], y=rev_df["Est Revenue High"],
-            name="High ($5 RPM)", marker_color="rgba(245,166,35,0.3)", marker_line_width=0))
-        fig_rev.add_trace(go.Bar(
-            x=rev_df["Title"].str[:35], y=rev_df["Est Revenue Mid"],
-            name="Mid ($3.5 RPM)", marker_color="#f5a623", marker_line_width=0))
-        fig_rev.add_trace(go.Bar(
-            x=rev_df["Title"].str[:35], y=rev_df["Est Revenue Low"],
-            name="Low ($1.5 RPM)", marker_color="rgba(245,166,35,0.5)", marker_line_width=0))
-        fig_rev.update_layout(**PLOTLY, barmode="overlay", title="Est. Revenue by Video (Top 15)",
-            yaxis_title="USD ($)", height=400)
-        st.plotly_chart(fig_rev, use_container_width=True)
-        st.caption("⚠️ Revenue estimates use typical YouTube RPM ranges ($1.50–$5.00). Actual revenue depends on monetization status, niche, audience location, and ad rates. Requires YouTube Analytics API for real figures.")
+        rev_chart = working_df.nlargest(15,"Views").copy()
+        rev_chart["Est Mid"] = (rev_chart["Views"] * 3.5 / 1000).round(0)
+        rev_chart = rev_chart.sort_values("Est Mid")
+        fig_rev = px.bar(rev_chart, x="Est Mid", y="Title", orientation="h",
+            title="Est. Revenue by Video (Top 15, $3.50 RPM)",
+            color="Est Mid", color_continuous_scale=["#1a0a00","#f5a623"])
+        fig_rev.update_layout(**PLOTLY, showlegend=False, height=420)
+        fig_rev.update_traces(marker_line_width=0)
+        fig_rev.update_yaxes(tickfont=dict(size=9), automargin=True)
+        fig_rev.update_xaxes(tickprefix="$")
+        st.plotly_chart(fig_rev, use_container_width=True, config=plotly_cfg())
+        st.caption("⚠️ Estimates only — actual revenue varies by niche and monetization status.")
 
     elif bc_sel == "engagement":
-        st.markdown("### Engagement Deep Dive")
         ec1, ec2 = st.columns(2)
         with ec1:
-            fig_lr = px.scatter(ch_df, x="Views", y="Like Rate %", hover_name="Title",
-                color="Like Rate %", color_continuous_scale="Reds",
-                title="Like Rate vs Views")
-            fig_lr.update_layout(**PLOTLY, height=320)
-            st.plotly_chart(fig_lr, use_container_width=True)
+            fig_lr = px.scatter(working_df, x="Views", y="Like Rate %", hover_name="Title",
+                color="Like Rate %", color_continuous_scale="Reds", title="Like Rate vs Views")
+            fig_lr.update_layout(**PLOTLY, height=300)
+            st.plotly_chart(fig_lr, use_container_width=True, config=plotly_cfg())
         with ec2:
-            fig_cr = px.scatter(ch_df, x="Views", y="Comment Rate %", hover_name="Title",
+            fig_cr = px.scatter(working_df, x="Views", y="Comment Rate %", hover_name="Title",
                 color="Comment Rate %", color_continuous_scale=["#001a33","#1e8fff"],
                 title="Comment Rate vs Views")
-            fig_cr.update_layout(**PLOTLY, height=320)
-            st.plotly_chart(fig_cr, use_container_width=True)
-        # Engagement over time
-        eng_t = ch_df.sort_values("Published")
-        fig_eng = go.Figure()
-        fig_eng.add_trace(go.Scatter(x=eng_t["Published"], y=eng_t["Like Rate %"],
-            mode="lines+markers", name="Like Rate %",
-            line=dict(color="#ff0033",width=2), marker=dict(size=4)))
-        fig_eng.add_trace(go.Scatter(x=eng_t["Published"], y=eng_t["Comment Rate %"],
-            mode="lines+markers", name="Comment Rate %",
-            line=dict(color="#1e8fff",width=2), marker=dict(size=4)))
-        fig_eng.update_layout(**PLOTLY, title="Engagement Rates Over Time", height=300)
-        st.plotly_chart(fig_eng, use_container_width=True)
+            fig_cr.update_layout(**PLOTLY, height=300)
+            st.plotly_chart(fig_cr, use_container_width=True, config=plotly_cfg())
 
     elif bc_sel == "videos":
-        st.markdown("### Upload Cadence")
-        monthly2 = ch_df.copy()
+        monthly2 = working_df.copy()
         monthly2["Month"] = monthly2["Published"].dt.to_period("M").astype(str)
         cad = monthly2.groupby("Month").agg(
-            Count=("Title","count"), Avg_Views=("Views","mean"),
-            Total_Views=("Views","sum")).reset_index()
+            Count=("Title","count"), Total_Views=("Views","sum")).reset_index()
         fig_cad = go.Figure()
         fig_cad.add_trace(go.Bar(x=cad["Month"], y=cad["Count"],
-            name="Videos Posted", marker_color="#252525", marker_line_width=0))
+            name="Videos", marker_color="#252525", marker_line_width=0))
         fig_cad.add_trace(go.Scatter(x=cad["Month"], y=cad["Total_Views"],
             name="Total Views", yaxis="y2",
-            line=dict(color="#ff0033",width=2), marker=dict(size=5,color="#ff0033")))
-        PLOTLY2 = {k:v for k,v in PLOTLY.items() if k not in ("xaxis","yaxis")}
+            line=dict(color="#ff0033", width=2), marker=dict(size=5, color="#ff0033")))
+        PLOTLY2 = {k: v for k, v in PLOTLY.items() if k not in ("xaxis","yaxis")}
         fig_cad.update_layout(**PLOTLY2, title="Upload Cadence vs Total Views",
-            yaxis2=dict(overlaying="y",side="right",gridcolor="#1e1e1e",color="#737373"),
-            legend=dict(orientation="h",y=1.1), height=360)
-        st.plotly_chart(fig_cad, use_container_width=True)
+            xaxis=dict(tickangle=-30, tickfont=dict(size=9), automargin=True, gridcolor="#1e1e1e"),
+            yaxis2=dict(overlaying="y", side="right", gridcolor="#1e1e1e", color="#737373"),
+            legend=dict(orientation="h", y=1.1), height=360)
+        st.plotly_chart(fig_cad, use_container_width=True, config=plotly_cfg())
 
     st.markdown("<br>", unsafe_allow_html=True)
-    DT1,DT2,DT3,DT4,DT5 = st.tabs(["  Videos  ","  Charts  ","  Upload Timing  ","  Content Series  ","  Notes  "])
+
+    # ── Sub-tabs ───────────────────────────────────────────────
+    DT1, DT2, DT3, DT4, DT5 = st.tabs(["  Videos  ", "  Charts  ", "  Upload Timing  ", "  Content Series  ", "  Notes  "])
 
     # ── VIDEOS ──
     with DT1:
-        sort_by = st.selectbox("Sort by", ["Views","Views per Day","Like Rate %","Comment Rate %","Published"],
-                               label_visibility="collapsed")
-        sorted_df = ch_df.sort_values(sort_by, ascending=(sort_by=="Published")).reset_index(drop=True)
+        sort_by = st.selectbox("Sort by",
+            ["Views","Views per Day","Like Rate %","Comment Rate %","Published"],
+            label_visibility="collapsed")
+        sorted_df = working_df.sort_values(sort_by, ascending=(sort_by == "Published")).reset_index(drop=True)
 
         page_key = f"vid_page_{selected}"
         if page_key not in st.session_state:
@@ -1454,122 +1468,120 @@ with T_DETAIL:
             st.session_state[page_key] = 0
             st.session_state[sort_key] = sort_by
 
-        per_page = 20
+        per_page    = 20
         total_pages = max(1, (len(sorted_df) + per_page - 1) // per_page)
-        page = st.session_state[page_key]
-        page_df = sorted_df.iloc[page * per_page:(page + 1) * per_page].reset_index(drop=True)
-
+        page        = st.session_state[page_key]
+        page_df     = sorted_df.iloc[page * per_page:(page + 1) * per_page].reset_index(drop=True)
         render_thumb_table(page_df)
 
-        # Pagination
         pg_cols = st.columns([1,1,4,1,1])
         if pg_cols[0].button("⟨⟨", key=f"first_{selected}", disabled=page==0):
             st.session_state[page_key] = 0; st.rerun()
-        if pg_cols[1].button("⟨", key=f"prev_{selected}", disabled=page==0):
+        if pg_cols[1].button("⟨",  key=f"prev_{selected}",  disabled=page==0):
             st.session_state[page_key] -= 1; st.rerun()
         pg_cols[2].markdown(
-            f'<p style="text-align:center;color:var(--text-muted);font-size:12px;padding-top:8px">Page {page+1} of {total_pages} — {len(sorted_df)} videos total</p>',
+            f'<p style="text-align:center;color:var(--text-muted);font-size:12px;padding-top:8px">Page {page+1} of {total_pages} — {len(sorted_df)} videos</p>',
             unsafe_allow_html=True)
-        if pg_cols[3].button("⟩", key=f"next_{selected}", disabled=page>=total_pages-1):
+        if pg_cols[3].button("⟩",  key=f"next_{selected}",  disabled=page>=total_pages-1):
             st.session_state[page_key] += 1; st.rerun()
-        if pg_cols[4].button("⟩⟩", key=f"last_{selected}", disabled=page>=total_pages-1):
+        if pg_cols[4].button("⟩⟩", key=f"last_{selected}",  disabled=page>=total_pages-1):
             st.session_state[page_key] = total_pages-1; st.rerun()
 
         st.markdown("<br>", unsafe_allow_html=True)
-        st.download_button("⬇  Export CSV", ch_df.to_csv(index=False).encode(), f"{selected.replace(' ','_')}.csv","text/csv")
+        st.download_button("⬇  Export CSV", working_df.to_csv(index=False).encode(),
+                           f"{selected.replace(' ','_')}.csv","text/csv")
 
     # ── CHARTS ──
     with DT2:
-        # Row 1: Top 10 views + momentum
-        c1,c2 = st.columns(2)
+        c1, c2 = st.columns(2)
         with c1:
-            top10 = ch_df.nlargest(10,"Views").sort_values("Views")
-            fig = px.bar(top10, x="Views", y="Title", orientation="h", title="Top 10 by Total Views",
+            top10 = working_df.nlargest(10,"Views").sort_values("Views")
+            fig = px.bar(top10, x="Views", y="Title", orientation="h",
+                         title="Top 10 by Views",
                          color="Views", color_continuous_scale=["#1a0000","#ff0033"])
-            fig.update_layout(**PLOTLY, showlegend=False, height=380)
+            fig.update_layout(**PLOTLY, showlegend=False, height=360)
             fig.update_traces(marker_line_width=0)
-            fig.update_yaxes(tickfont=dict(size=10,color="#737373"))
-            st.plotly_chart(fig, use_container_width=True)
+            fig.update_yaxes(tickfont=dict(size=9), automargin=True)
+            st.plotly_chart(fig, use_container_width=True, config=plotly_cfg())
         with c2:
-            top10m = ch_df.nlargest(10,"Views per Day").sort_values("Views per Day")
-            fig2 = px.bar(top10m, x="Views per Day", y="Title", orientation="h", title="Top 10 by Momentum (Views/Day)",
+            top10m = working_df.nlargest(10,"Views per Day").sort_values("Views per Day")
+            fig2 = px.bar(top10m, x="Views per Day", y="Title", orientation="h",
+                          title="Top 10 by Momentum",
                           color="Views per Day", color_continuous_scale=["#001a33","#1e8fff"])
-            fig2.update_layout(**PLOTLY, showlegend=False, height=380)
+            fig2.update_layout(**PLOTLY, showlegend=False, height=360)
             fig2.update_traces(marker_line_width=0)
-            fig2.update_yaxes(tickfont=dict(size=10,color="#737373"))
-            st.plotly_chart(fig2, use_container_width=True)
+            fig2.update_yaxes(tickfont=dict(size=9), automargin=True)
+            st.plotly_chart(fig2, use_container_width=True, config=plotly_cfg())
 
-        # Row 2: Views timeline + likes timeline
-        trend = ch_df.sort_values("Published")
+        trend = working_df.sort_values("Published")
         fig3 = go.Figure()
         fig3.add_trace(go.Scatter(x=trend["Published"], y=trend["Views"],
-            mode="lines+markers", line=dict(color="#ff0033",width=2),
-            marker=dict(color="#ff0033",size=5),
+            mode="lines+markers", line=dict(color="#ff0033", width=2),
+            marker=dict(color="#ff0033", size=4),
             fill="tozeroy", fillcolor="rgba(255,0,51,0.06)", name="Views"))
-        fig3.update_layout(**PLOTLY, title="Views Per Video Over Time", height=280)
-        st.plotly_chart(fig3, use_container_width=True)
+        fig3.update_layout(**PLOTLY, title="Views Per Video Over Time", height=260)
+        st.plotly_chart(fig3, use_container_width=True, config=plotly_cfg())
 
-        c3,c4 = st.columns(2)
+        c3, c4 = st.columns(2)
         with c3:
             fig_likes = go.Figure()
             fig_likes.add_trace(go.Bar(x=trend["Published"], y=trend["Likes"],
                 marker_color="#ff0033", marker_line_width=0, name="Likes"))
-            fig_likes.update_layout(**PLOTLY, title="Likes Per Video", height=260)
-            st.plotly_chart(fig_likes, use_container_width=True)
+            fig_likes.update_layout(**PLOTLY, title="Likes Per Video", height=240)
+            st.plotly_chart(fig_likes, use_container_width=True, config=plotly_cfg())
         with c4:
             fig_coms = go.Figure()
             fig_coms.add_trace(go.Bar(x=trend["Published"], y=trend["Comments"],
                 marker_color="#1e8fff", marker_line_width=0, name="Comments"))
-            fig_coms.update_layout(**PLOTLY, title="Comments Per Video", height=260)
-            st.plotly_chart(fig_coms, use_container_width=True)
+            fig_coms.update_layout(**PLOTLY, title="Comments Per Video", height=240)
+            st.plotly_chart(fig_coms, use_container_width=True, config=plotly_cfg())
 
-        # Row 3: Engagement map + like rate distribution
-        c5,c6 = st.columns(2)
+        c5, c6 = st.columns(2)
         with c5:
-            fig4 = px.scatter(ch_df, x="Views", y="Like Rate %", size="Comments",
+            fig4 = px.scatter(working_df, x="Views", y="Like Rate %", size="Comments",
                               color="Comment Rate %", hover_name="Title",
-                              title="Engagement Map (bubble = comments)",
+                              title="Engagement Map",
                               color_continuous_scale="Reds")
-            fig4.update_layout(**PLOTLY, height=340)
-            st.plotly_chart(fig4, use_container_width=True)
+            fig4.update_layout(**PLOTLY, height=320)
+            st.plotly_chart(fig4, use_container_width=True, config=plotly_cfg())
         with c6:
-            fig_dist = go.Figure()
-            fig_dist.add_trace(go.Histogram(x=ch_df["Like Rate %"], nbinsx=15,
-                marker_color="#ff0033", marker_line_width=0, opacity=0.8, name="Like Rate"))
-            fig_dist.add_vline(x=ch_df["Like Rate %"].mean(), line_dash="dash",
-                line_color="#fff", annotation_text="Average")
-            fig_dist.update_layout(**PLOTLY, title="Like Rate Distribution", height=340,
-                xaxis_title="Like Rate %", yaxis_title="# Videos")
-            st.plotly_chart(fig_dist, use_container_width=True)
+            fig_decay = px.scatter(working_df, x="Days Since Publish", y="Views per Day",
+                hover_name="Title", color="Views",
+                color_continuous_scale=["#111","#ff0033"],
+                title="Evergreen Detector")
+            fig_decay.update_layout(**PLOTLY, height=320,
+                xaxis_title="Days Since Published", yaxis_title="Views/Day")
+            st.plotly_chart(fig_decay, use_container_width=True, config=plotly_cfg())
 
-        # Row 4: Est revenue per video
-        rev_chart = ch_df.nlargest(15,"Views").copy()
-        rev_chart["Est Revenue"] = (rev_chart["Views"] * 3.5 / 1000).round(0)
-        rev_chart = rev_chart.sort_values("Est Revenue")
-        fig_rev = px.bar(rev_chart, x="Est Revenue", y="Title", orientation="h",
-            title="Est. Revenue by Video — Top 15 (at $3.50 RPM)",
+        # Like rate distribution
+        fig_dist = go.Figure()
+        fig_dist.add_trace(go.Histogram(x=working_df["Like Rate %"], nbinsx=15,
+            marker_color="#ff0033", marker_line_width=0, opacity=0.8))
+        fig_dist.add_vline(x=working_df["Like Rate %"].mean(), line_dash="dash",
+            line_color="#fff", annotation_text="Average")
+        fig_dist.update_layout(**PLOTLY, title="Like Rate Distribution", height=300,
+            xaxis_title="Like Rate %", yaxis_title="# Videos")
+        st.plotly_chart(fig_dist, use_container_width=True, config=plotly_cfg())
+
+        # Revenue chart
+        rev_chart2 = working_df.nlargest(15,"Views").copy()
+        rev_chart2["Est Revenue"] = (rev_chart2["Views"] * 3.5 / 1000).round(0)
+        rev_chart2 = rev_chart2.sort_values("Est Revenue")
+        fig_rev2 = px.bar(rev_chart2, x="Est Revenue", y="Title", orientation="h",
+            title="Est. Revenue — Top 15 (at $3.50 RPM)",
             color="Est Revenue", color_continuous_scale=["#1a0a00","#f5a623"])
-        fig_rev.update_layout(**PLOTLY, showlegend=False, height=420)
-        fig_rev.update_traces(marker_line_width=0)
-        fig_rev.update_yaxes(tickfont=dict(size=10,color="#737373"))
-        fig_rev.update_xaxes(tickprefix="$")
-        st.plotly_chart(fig_rev, use_container_width=True)
-        st.caption("⚠️ Revenue estimates use $3.50 RPM midpoint. Actual revenue varies by niche, audience, and monetization status.")
-
-        # Row 5: Views/Day decay curve (older vids trending)
-        fig_decay = px.scatter(ch_df, x="Days Since Publish", y="Views per Day",
-            hover_name="Title", color="Views",
-            color_continuous_scale=["#111","#ff0033"],
-            title="Views/Day vs Video Age — Evergreen Detector")
-        fig_decay.update_layout(**PLOTLY, height=320,
-            xaxis_title="Days Since Published", yaxis_title="Views/Day")
-        st.plotly_chart(fig_decay, use_container_width=True)
-        st.caption("Videos above the trend line at high age = evergreen content worth promoting.")
+        fig_rev2.update_layout(**PLOTLY, showlegend=False, height=400)
+        fig_rev2.update_traces(marker_line_width=0)
+        fig_rev2.update_yaxes(tickfont=dict(size=9), automargin=True)
+        fig_rev2.update_xaxes(tickprefix="$")
+        st.plotly_chart(fig_rev2, use_container_width=True, config=plotly_cfg())
+        st.caption("⚠️ Revenue estimates use $3.50 RPM midpoint. Actual revenue varies.")
 
     # ── UPLOAD TIMING ──
     with DT3:
         day_order = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
-        temp = ch_df.copy(); temp["Day"] = temp["Published"].dt.day_name()
+        temp = working_df.copy()
+        temp["Day"] = temp["Published"].dt.day_name()
         day_avg = temp.groupby("Day")["Views"].mean().reindex(day_order).dropna()
 
         if not day_avg.empty:
@@ -1581,37 +1593,42 @@ with T_DETAIL:
                     <div class="best-day-value">{best_day}</div>
                     <div class="best-day-sub">Avg {fmt(int(best_avg))} views on videos posted this day</div>
                 </div></div>""", unsafe_allow_html=True)
-
-            fig = px.bar(x=day_avg.index, y=day_avg.values, title="Avg Views by Upload Day",
+            fig = px.bar(x=day_avg.index, y=day_avg.values,
+                         title="Avg Views by Upload Day",
                          labels={"x":"","y":"Avg Views"}, color=day_avg.values,
                          color_continuous_scale=["#1a0000","#ff0033"])
-            fig.update_layout(**PLOTLY, showlegend=False)
+            fig.update_layout(**PLOTLY, showlegend=False, height=280)
             fig.update_traces(marker_line_width=0)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, config=plotly_cfg())
 
-        monthly = ch_df.copy()
+        monthly = working_df.copy()
         monthly["Month"] = monthly["Published"].dt.to_period("M").astype(str)
-        freq = monthly.groupby("Month").agg(Videos=("Title","count"), Avg_Views=("Views","mean")).reset_index()
+        freq = monthly.groupby("Month").agg(
+            Videos=("Title","count"), Avg_Views=("Views","mean")).reset_index()
         freq["Avg_Views"] = freq["Avg_Views"].round(0).astype(int)
 
         fa, fb = st.columns(2)
         with fa:
-            fig_freq = px.bar(freq, x="Month", y="Videos", title="Videos Posted per Month",
+            fig_freq = px.bar(freq, x="Month", y="Videos",
+                              title="Videos Posted per Month",
                               labels={"Videos":"Videos Posted","Month":""})
             fig_freq.update_traces(marker_color="#2a2a2a", marker_line_width=0)
-            fig_freq.update_layout(**PLOTLY)
-            st.plotly_chart(fig_freq, use_container_width=True)
+            fig_freq.update_layout(**PLOTLY, height=280)
+            fig_freq.update_xaxes(tickangle=-40, tickfont=dict(size=9))
+            st.plotly_chart(fig_freq, use_container_width=True, config=plotly_cfg())
         with fb:
-            fig_avgv = px.line(freq, x="Month", y="Avg_Views", title="Avg Views per Month",
+            fig_avgv = px.line(freq, x="Month", y="Avg_Views",
+                               title="Avg Views per Month",
                                labels={"Avg_Views":"Avg Views","Month":""}, markers=True)
             fig_avgv.update_traces(line_color="#ff0033", marker_color="#ff0033", marker_size=6)
-            fig_avgv.update_layout(**PLOTLY)
-            st.plotly_chart(fig_avgv, use_container_width=True)
+            fig_avgv.update_layout(**PLOTLY, height=280)
+            fig_avgv.update_xaxes(tickangle=-40, tickfont=dict(size=9))
+            st.plotly_chart(fig_avgv, use_container_width=True, config=plotly_cfg())
 
     # ── CONTENT SERIES ──
     with DT4:
         st.markdown('<div class="section-label">Topic Analysis</div>', unsafe_allow_html=True)
-        titles = ch_df["Title"].tolist()
+        titles = working_df["Title"].tolist()
         words_all = []
         for t in titles: words_all.extend(re.findall(r"\b[A-Za-z]{3,}\b", t))
         stop = {"this","that","with","from","have","what","your","they","their","will","more","just","been",
@@ -1625,9 +1642,9 @@ with T_DETAIL:
         if top_words:
             tags_html = '<div class="tags">'
             for word, count in top_words[:14]:
-                mask  = ch_df["Title"].str.contains(word, case=False, na=False)
-                avg_v = int(ch_df.loc[mask,"Views"].mean()) if mask.any() else 0
-                cls   = "tag tag-hot" if avg_v > ch_df["Views"].mean() else "tag"
+                mask  = working_df["Title"].str.contains(word, case=False, na=False)
+                avg_v = int(working_df.loc[mask,"Views"].mean()) if mask.any() else 0
+                cls   = "tag tag-hot" if avg_v > working_df["Views"].mean() else "tag"
                 tags_html += f'<span class="{cls}">{word} ({count})</span>'
             tags_html += '</div>'
             st.markdown(tags_html, unsafe_allow_html=True)
@@ -1637,22 +1654,23 @@ with T_DETAIL:
         for t in titles:
             ws = re.findall(r"\b[A-Za-z]{3,}\b", t)
             phrases.extend([f"{ws[i]} {ws[i+1]}" for i in range(len(ws)-1)])
-        stop_phrases = {"and the","in the","on the","of the","to the","is a","it is","with the","for the","how to","that is","this is","you are"}
+        stop_phrases = {"and the","in the","on the","of the","to the","is a","it is","with the",
+                        "for the","how to","that is","this is","you are"}
         phrases_f = [p.lower() for p in phrases if p.lower() not in stop_phrases]
         phrase_counts = Counter(phrases_f).most_common(12)
 
         if phrase_counts:
             phr_df = pd.DataFrame(phrase_counts, columns=["Phrase","Count"])
             phr_df["Avg Views"] = phr_df["Phrase"].apply(
-                lambda p: int(ch_df.loc[ch_df["Title"].str.contains(p,case=False,na=False),"Views"].mean())
-                if ch_df["Title"].str.contains(p,case=False,na=False).any() else 0)
+                lambda p: int(working_df.loc[working_df["Title"].str.contains(p, case=False, na=False),"Views"].mean())
+                if working_df["Title"].str.contains(p, case=False, na=False).any() else 0)
             phr_df = phr_df.sort_values("Avg Views", ascending=False)
             fig = px.scatter(phr_df, x="Count", y="Avg Views", text="Phrase",
                              title="Topic Frequency vs. Avg Views",
                              color="Avg Views", color_continuous_scale="Reds", size="Count")
-            fig.update_traces(textposition="top center", textfont=dict(size=10,color="#e8e8e8"))
-            fig.update_layout(**PLOTLY, height=400)
-            st.plotly_chart(fig, use_container_width=True)
+            fig.update_traces(textposition="top center", textfont=dict(size=9, color="#e8e8e8"))
+            fig.update_layout(**PLOTLY, height=380)
+            st.plotly_chart(fig, use_container_width=True, config=plotly_cfg())
             st.dataframe(phr_df, use_container_width=True, hide_index=True)
 
     # ── NOTES ──
@@ -1663,154 +1681,13 @@ with T_DETAIL:
                                  label_visibility="collapsed")
         if st.button("💾  Save Notes", type="primary"):
             st.session_state.channels[selected]["notes"] = new_notes
-            save_channel_to_db(selected, info["id"], stats, ch_df,
+            save_channel_to_db(selected, info["id"], stats, ch_df_raw,
                                info.get("last_refreshed",""), new_notes, info.get("ideas",{}))
             st.success("Saved.")
-
-# ═══════════════════════════════════════════
-
-# ═══════════════════════════════════════════
-# AI IDEAS — TOP LEVEL TAB
-# ═══════════════════════════════════════════
-with T_AI:
-    # Animated gradient header via iframe
-    components.html("""<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    body{
-        background:linear-gradient(135deg,#0f0008 0%,#0a0a0a 30%,#00080f 65%,#0f0008 100%);
-        background-size:300% 300%;
-        animation:grad 12s ease infinite;
-        padding:40px 24px 32px;
-        font-family:'Instrument Sans',system-ui,sans-serif;
-        text-align:center;
-    }
-    @keyframes grad{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
-    .badge{display:inline-flex;align-items:center;gap:7px;background:rgba(255,0,51,0.1);border:1px solid rgba(255,0,51,0.25);border-radius:20px;padding:5px 14px;margin-bottom:18px}
-    .dot{width:7px;height:7px;border-radius:50%;background:#ff0033;animation:pulse 2s infinite}
-    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
-    .badge-text{font-family:monospace;font-size:10px;font-weight:700;color:#ff0033;letter-spacing:1.5px;text-transform:uppercase}
-    h1{font-size:28px;font-weight:700;color:#fff;letter-spacing:-0.5px;margin-bottom:10px}
-    p{color:#737373;font-size:13px;max-width:480px;margin:0 auto;line-height:1.7}
-    </style></head><body>
-    <div class="badge"><div class="dot"></div><span class="badge-text">Claude AI</span></div>
-    <h1>Strategic Video Ideas</h1>
-    <p>Select a channel and Claude will analyze your top-performing content to generate data-driven video ideas tailored to your audience.</p>
-    </body></html>""", height=220)
-
-    if not st.session_state.anthropic_key:
-        st.markdown('<div class="alert alert-warn" style="max-width:520px;margin:0 auto"><div class="alert-icon">⚠️</div><div class="alert-body"><div class="alert-title">Anthropic API key required</div><div class="alert-desc">Add your key under API Keys in the sidebar.</div></div></div>', unsafe_allow_html=True)
-    else:
-        channels_with_data = {k: v for k, v in st.session_state.channels.items() if v.get("data") is not None}
-        if not channels_with_data:
-            st.markdown('<div class="alert alert-info"><div class="alert-icon">📡</div><div class="alert-body"><div class="alert-title">No channel data loaded</div><div class="alert-desc">Refresh at least one channel first, then come back here.</div></div></div>', unsafe_allow_html=True)
-        else:
-            ai_c1, ai_c2 = st.columns([3, 2])
-            with ai_c1:
-                ai_channel = st.selectbox(
-                    "Choose a channel to analyze",
-                    list(channels_with_data.keys()),
-                    key="ai_top_ch"
-                )
-            with ai_c2:
-                st.markdown("<br>", unsafe_allow_html=True)
-                generate_clicked = st.button("✦  Generate Ideas", type="primary", use_container_width=True, key="ai_top_gen")
-
-            if generate_clicked:
-                ai_info = st.session_state.channels[ai_channel]
-                ai_df   = ai_info["data"]
-                with st.spinner("Claude is analyzing your channel..."):
-                    try:
-                        result = generate_ai_ideas(
-                            st.session_state.anthropic_key, ai_channel, ai_df,
-                            ai_info.get("channel_stats", {}).get("description", ""))
-                        st.session_state.ideas_cache[ai_channel] = result
-                        st.session_state.channels[ai_channel]["ideas"] = {"ai_text": result}
-                        save_channel_to_db(ai_channel, ai_info["id"],
-                                           ai_info.get("channel_stats", {}), ai_df,
-                                           ai_info.get("last_refreshed", ""),
-                                           ai_info.get("notes", ""), {"ai_text": result})
-                    except Exception as e:
-                        st.error(f"Claude API error: {e}")
-
-            # Show cached result for selected channel
-            cached = (st.session_state.ideas_cache.get(ai_channel, "") or
-                      st.session_state.channels.get(ai_channel, {}).get("ideas", {}).get("ai_text", ""))
-
-            if cached:
-                import re as _re, html as _hesc
-                safe = _hesc.escape(cached)
-                # Unescape the bold markers we want to render
-                safe = _re.sub(r'&lt;strong[^&]*&gt;(.*?)&lt;/strong&gt;', r'<strong style="color:#fff">\1</strong>', safe)
-                lines = safe.split("\n")
-                output_html = ""
-                for line in lines:
-                    line = line.strip()
-                    if not line:
-                        output_html += '<div style="height:6px"></div>'
-                    elif _re.match(r'^\d+\.', line):
-                        output_html += f'<div style="background:rgba(255,255,255,0.02);border:1px solid #252525;border-left:3px solid #ff0033;border-radius:6px;padding:12px 16px;margin-bottom:10px;font-size:13px;line-height:1.75;color:#c8c8c8">{line}</div>'
-                    elif line.startswith("**") and line.endswith("**"):
-                        output_html += f'<div style="font-size:14px;font-weight:700;color:#fff;margin:18px 0 8px;padding-bottom:6px;border-bottom:1px solid #1e1e1e">{line.strip("*")}</div>'
-                    elif line.startswith("#"):
-                        output_html += f'<div style="font-size:15px;font-weight:700;color:#fff;margin:20px 0 8px">{line.lstrip("# ")}</div>'
-                    elif line.startswith("-") or line.startswith("•"):
-                        output_html += f'<div style="font-size:13px;color:#aaa;line-height:1.75;padding-left:14px;margin-bottom:5px;position:relative"><span style="position:absolute;left:0;color:#ff0033">›</span>{line[1:].strip()}</div>'
-                    else:
-                        output_html += f'<div style="font-size:13px;color:#c8c8c8;line-height:1.8;margin-bottom:4px">{line}</div>'
-
-                components.html(f"""<!DOCTYPE html><html><head><meta charset="utf-8">
-                <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-                <style>
-                  *{{box-sizing:border-box;margin:0;padding:0}}
-                  body{{
-                    font-family:'Instrument Sans',system-ui,sans-serif;
-                    padding:24px 28px;
-                    background:linear-gradient(160deg,#0f0008 0%,#0a0a0a 45%,#00080f 100%);
-                    background-size:300% 300%;
-                    animation:bgShift 18s ease infinite;
-                    min-height:100%;
-                  }}
-                  @keyframes bgShift{{0%{{background-position:0% 50%}}50%{{background-position:100% 50%}}100%{{background-position:0% 50%}}}}
-                  .hdr{{display:flex;align-items:center;gap:10px;margin-bottom:22px;padding-bottom:14px;border-bottom:1px solid #1e1e1e}}
-                  .dot{{width:8px;height:8px;border-radius:50%;background:#ff0033;animation:pulse 2s infinite;flex-shrink:0}}
-                  @keyframes pulse{{0%,100%{{opacity:1}}50%{{opacity:0.3}}}}
-                  .lbl{{font-family:monospace;font-size:10px;font-weight:700;color:#ff0033;letter-spacing:1.5px;text-transform:uppercase}}
-                  .chn{{font-size:12px;color:#555;margin-left:auto;font-weight:500}}
-                  strong{{color:#fff;font-weight:700}}
-                  ::-webkit-scrollbar{{width:4px}}
-                  ::-webkit-scrollbar-track{{background:#0a0a0a}}
-                  ::-webkit-scrollbar-thumb{{background:#2a2a2a;border-radius:2px}}
-                </style></head><body>
-                <div class="hdr">
-                  <div class="dot"></div>
-                  <div class="lbl">Claude Analysis</div>
-                  <div class="chn">{_hesc.escape(str(ai_channel))}</div>
-                </div>
-                {output_html}
-                </body></html>""", height=620, scrolling=True)
-
-                st.markdown("<br>", unsafe_allow_html=True)
-                rc1, rc2, _ = st.columns([2, 2, 4])
-                if rc1.button("↺  Regenerate", key="ai_regen", use_container_width=True):
-                    ai_info2 = st.session_state.channels.get(ai_channel, {})
-                    ai_df2   = ai_info2.get("data")
-                    if ai_df2 is not None and not ai_df2.empty:
-                        with st.spinner("Regenerating..."):
-                            try:
-                                r2 = generate_ai_ideas(
-                                    st.session_state.anthropic_key, ai_channel, ai_df2,
-                                    ai_info2.get("channel_stats", {}).get("description", ""))
-                                st.session_state.ideas_cache[ai_channel] = r2
-                                st.rerun()
-                            except Exception as e:
-                                st.error(str(e))
-                if rc2.button("🗑  Clear", key="ai_clear", use_container_width=True):
-                    st.session_state.ideas_cache.pop(ai_channel, None)
-                    st.rerun()
 
 # ─────────────────────────────────────────────────────────────
 # FOOTER
 # ─────────────────────────────────────────────────────────────
 st.markdown("<br><br>", unsafe_allow_html=True)
 st.divider()
-st.markdown('<p style="color:var(--text-dim);font-size:11px;font-family:var(--font-mono)">Chamberlin Media Monitor  •  YouTube Data API v3  •  Claude AI  •  Built for Chamberlin Media</p>', unsafe_allow_html=True)
+st.markdown('<p style="color:var(--text-dim);font-size:11px;font-family:var(--font-mono)">Chamberlin Media Monitor  •  YouTube Data API v3  •  Built for Chamberlin Media</p>', unsafe_allow_html=True)
