@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: chamberlin-media-monitor
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: YOUTUBE_API_KEY
+        sync: false
+      - key: DATA_DIR
+        value: /data
+      - key: SECRET_KEY
+        generateValue: true
+    disk:
+      name: chamberlin-db
+      mountPath: /data
+      sizeGB: 1
