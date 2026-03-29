@@ -299,20 +299,20 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--font);min-hei
 
   <!-- Stat bubbles (clicking opens modal) -->
   <div class="bubbles" style="margin-top:18px">
-    <div class="bubble b-red"   onclick="bubbleModal('subs')"  title="Click for details">
-      <div class="b-lbl">Subscribers</div>
-      <div class="b-val" id="d-subs">—</div>
-      <div class="b-sub">across all channels</div>
-    </div>
     <div class="bubble b-blue"  onclick="bubbleModal('views')" title="Click for details">
-      <div class="b-lbl">Total Views</div>
+      <div class="b-lbl">Views <span id="d-period-lbl" style="color:var(--muted)">(All Time)</span></div>
       <div class="b-val" id="d-views">—</div>
-      <div class="b-sub">lifetime</div>
+      <div class="b-sub" id="d-subs-sub">Total subs: —</div>
     </div>
     <div class="bubble b-gold"  onclick="bubbleModal('rev')"   title="Click for details">
       <div class="b-lbl">Est. Revenue</div>
       <div class="b-val" id="d-rev">—</div>
       <div class="b-sub">~$3.50 RPM</div>
+    </div>
+    <div class="bubble b-red"   onclick="bubbleModal('subs')"  title="Click for channel breakdown">
+      <div class="b-lbl">Total Subscribers</div>
+      <div class="b-val" id="d-subs">—</div>
+      <div class="b-sub">lifetime · all channels</div>
     </div>
     <div class="bubble b-green" onclick="bubbleModal('momentum')" title="Click for details">
       <div class="b-lbl">Channels</div>
@@ -544,10 +544,12 @@ function loadDashboard(){
     .then(r=>r.json())
     .then(d=>{
       DASH_DATA=d;
-      document.getElementById('d-subs').textContent  = d.total_subs;
-      document.getElementById('d-views').textContent = d.total_views;
-      document.getElementById('d-rev').textContent   = d.total_rev;
-      document.getElementById('d-n').textContent     = d.n_channels;
+      document.getElementById('d-subs').textContent     = d.total_subs;
+      document.getElementById('d-views').textContent    = d.period_views || d.total_views;
+      document.getElementById('d-subs-sub').textContent = `Total subs: ${d.total_subs}`;
+      document.getElementById('d-period-lbl').textContent = TIME==='All' ? '(All Time)' : `(${TIME})`;
+      document.getElementById('d-rev').textContent      = d.total_rev;
+      document.getElementById('d-n').textContent        = d.n_channels;
       renderOutliers(d.outliers);
       renderRevTable(d.rev_rows);
       renderMomentum(d.top_momentum);
@@ -604,18 +606,21 @@ function renderRevTable(rows){
     : '<tr><td colspan="5" style="padding:14px;color:var(--muted);text-align:center">No data — refresh channels</td></tr>';
 }
 
+let DASH_VIDS = [];
+
 function renderMomentum(list){
+  DASH_VIDS = list;
   document.getElementById('d-momentum').innerHTML = list.length
-    ? list.map(v=>{
+    ? list.map((v,i)=>{
         const thumb=v.thumbnail?`<img class="vt-thumb" src="${v.thumbnail}" loading="lazy">`:`<div class="vt-thumb-ph">▶</div>`;
         const badge=v.badge?`<span class="badge badge-${v.badge.toLowerCase()}">${v.badge}</span>`:'';
-        return `<tr>
-          <td style="padding:7px 8px;width:108px"><a href="${v.url}" target="_blank">${thumb}</a></td>
+        return `<tr style="cursor:pointer" onclick="openDashVidModal(${i})">
+          <td style="padding:7px 8px;width:108px">${thumb}</td>
           <td class="vt-body">
             <div class="vt-ch">${esc(v.channel)}</div>
             <div class="vt-title">${esc(v.title)}</div>
             <div class="vt-date">${v.published} · ${v.days}d ago</div>
-            ${badge}<a class="vt-link" href="${v.url}" target="_blank">WATCH ↗</a>
+            ${badge}
           </td>
           <td class="vt-num">${v.views}</td>
           <td class="vt-num hm">${v.likes}</td>
@@ -624,6 +629,27 @@ function renderMomentum(list){
         </tr>`;
       }).join('')
     : '<tr><td colspan="6" style="padding:14px;color:var(--muted);text-align:center">No data — refresh channels</td></tr>';
+}
+
+function openDashVidModal(i){
+  const v = DASH_VIDS[i];
+  if(!v) return;
+  const badge = v.badge ? `<span class="badge badge-${v.badge.toLowerCase()}" style="font-size:10px">${v.badge}</span>` : '';
+  document.getElementById('vid-modal-title').textContent = v.channel || 'Video Details';
+  document.getElementById('vid-modal-body').innerHTML = `
+    ${v.thumbnail ? `<img src="${v.thumbnail}" style="width:100%;border-radius:8px;margin-bottom:14px;display:block">` : ''}
+    <div style="font-size:14px;font-weight:600;color:#fff;line-height:1.5;margin-bottom:6px">${esc(v.title)}</div>
+    <div style="font-size:11px;color:var(--red);font-weight:700;font-family:var(--mono);margin-bottom:4px">${esc(v.channel||'')}</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px">${v.published} &nbsp;·&nbsp; ${v.days} days ago &nbsp;${badge}</div>
+    <div class="modal-stat-row">
+      <div class="modal-stat"><div class="modal-stat-lbl">Views</div><div class="modal-stat-val" style="color:var(--red)">${v.views}</div></div>
+      <div class="modal-stat"><div class="modal-stat-lbl">Likes</div><div class="modal-stat-val" style="color:var(--blue)">${v.likes}</div></div>
+      <div class="modal-stat"><div class="modal-stat-lbl">Views / Day</div><div class="modal-stat-val" style="color:var(--green)">${Number(v.vpd).toFixed(1)}</div></div>
+      <div class="modal-stat"><div class="modal-stat-lbl">Like Rate</div><div class="modal-stat-val">${Number(v.lr).toFixed(2)}%</div></div>
+    </div>
+    <a href="${v.url}" target="_blank" style="display:inline-block;margin-top:4px;padding:9px 20px;background:var(--red);color:#fff;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none;box-shadow:0 0 14px var(--rg)">▶ Watch on YouTube</a>
+  `;
+  document.getElementById('vid-modal-bg').classList.add('open');
 }
 
 // ── CHANNEL DETAIL ─────────────────────────────────────────
@@ -652,7 +678,6 @@ function renderChBubbles(s, display){
     <div class="bubble b-blue"  onclick="chBubbleModal('views',  '${display}')" title="Click for chart"><div class="b-lbl">Views</div><div class="b-val">${s.total_views}</div><div class="b-sub">lifetime</div></div>
     <div class="bubble b-green" onclick="chBubbleModal('avg',    '${display}')" title="Click for chart"><div class="b-lbl">Avg Views</div><div class="b-val">${s.avg_views}</div><div class="b-sub">per video</div></div>
     <div class="bubble b-gold"  onclick="chBubbleModal('rev',    '${display}')" title="Click for chart"><div class="b-lbl">Est Revenue</div><div class="b-val" style="font-size:15px">${s.rev_range}</div><div class="b-sub">$1.5–$5 RPM</div></div>
-    <div class="bubble b-grey"  onclick="chBubbleModal('engage', '${display}')" title="Click for chart"><div class="b-lbl">Like Rate</div><div class="b-val" style="font-size:18px">${s.avg_lr}</div><div class="b-sub">avg · cmt ${s.avg_cr}</div></div>
     <div class="bubble b-grey"  onclick="chBubbleModal('cadence','${display}')" title="Click for chart"><div class="b-lbl">Videos</div><div class="b-val">${s.n_videos}</div><div class="b-sub">in period</div></div>
   `;
 }
@@ -773,24 +798,27 @@ function closeModal(e){
 
 function mStat(lbl,val){ return `<div class="modal-stat"><div class="modal-stat-lbl">${lbl}</div><div class="modal-stat-val">${val}</div></div>`; }
 
-// Dashboard bubble modals — show channel comparison charts
+// Dashboard bubble modals — show channel comparison charts using live data
 function bubbleModal(type){
   if(!DASH_DATA) return;
   const d=DASH_DATA;
+  const rows = d.channel_rows || [];
+  const labels = rows.map(r=>r.display);
   if(type==='subs'){
     openModal('Subscribers by Channel',
       mStat('Total',d.total_subs)+mStat('Channels',d.n_channels),
       ctx=>new Chart(ctx,{type:'bar',data:{
-        labels:{{ channels.keys()|list|tojson }},
-        datasets:[{data:{{ channels.values()|map(attribute='stats')|map(attribute='subscribers',default=0)|list|tojson }},
+        labels,
+        datasets:[{data:rows.map(r=>parseInt((r.subscribers||'0').replace(/[^\d]/g,''))||0),
           backgroundColor:'#ff224428',borderColor:'#ff2244',borderWidth:2}]},
         options:{...CD,responsive:true,maintainAspectRatio:false}}));
   } else if(type==='views'){
-    openModal('Total Views by Channel',
-      mStat('Combined',d.total_views)+mStat('Channels',d.n_channels),
+    const periodLbl = TIME==='All'?'All Time':TIME;
+    openModal(`Views by Channel (${periodLbl})`,
+      mStat('Period Views',d.period_views||d.total_views)+mStat('Channels',d.n_channels),
       ctx=>new Chart(ctx,{type:'bar',data:{
-        labels:{{ channels.keys()|list|tojson }},
-        datasets:[{data:{{ channels.values()|map(attribute='stats')|map(attribute='total_views',default=0)|list|tojson }},
+        labels,
+        datasets:[{data:rows.map(r=>parseInt((r.filtered_views||'0').replace(/[^\d.KkMm]/g,'')))  ,
           backgroundColor:'#00aaff28',borderColor:'#00aaff',borderWidth:2}]},
         options:{...CD,responsive:true,maintainAspectRatio:false}}));
   } else if(type==='rev'){
@@ -914,12 +942,27 @@ function toast(msg,type='ok'){ const t=document.getElementById('toast'); t.textC
 function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
 // ── INIT ───────────────────────────────────────────────────
-setTime('All');           // set default chip active
-loadDashboard();          // load dashboard on page open
+setTime('All');
+loadDashboard();
 
-// Auto-load first channel in detail view
 const firstCh = document.getElementById('ch-sel')?.options[0]?.value;
 if(firstCh){ CURRENT=firstCh; loadChannel(firstCh); }
+
+// Auto-refresh stale channels on open
+if({{ needs_refresh | tojson }}){
+  setTimeout(()=>{
+    toast('Auto-refreshing channels...','ok');
+    fetch('/api/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})
+      .then(r=>r.json())
+      .then(data=>{
+        const ok=data.results.filter(r=>r.status==='ok').length;
+        toast(`${ok} channels refreshed`,'ok');
+        loadDashboard();
+        if(CURRENT) loadChannel(CURRENT);
+      })
+      .catch(()=>toast('Auto-refresh failed','err'));
+  }, 800);
+}
 </script>
 </body>
 </html>

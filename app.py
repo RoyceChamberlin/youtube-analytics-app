@@ -334,10 +334,12 @@ def index():
     channels = load_channels()
     folders  = load_folders()
     # Pass channel list and folders to template; dashboard data loaded via JS API
+    needs_refresh = any(info["last_refreshed"] == "Never" or not info["videos"] for info in channels.values())
     return render_template("index.html",
         channels=channels,
         folders=folders,
         channel_names=list(channels.keys()),
+        needs_refresh=needs_refresh,
     )
 
 @app.route("/login", methods=["GET","POST"])
@@ -368,9 +370,12 @@ def api_dashboard():
     # Filter videos by time for momentum / revenue / outliers
     all_vids_filtered = []
     total_rev_filtered = 0
+    period_views = 0
     for ch_name, info in channels.items():
         fvids = filter_videos(info["videos"], preset)
-        total_rev_filtered += sum(v["views"] for v in fvids)*3.5/1000
+        pv = sum(v["views"] for v in fvids)
+        period_views += pv
+        total_rev_filtered += pv * 3.5 / 1000
         for v in fvids:
             all_vids_filtered.append({**v,"channel":info["stats"].get("channel_name",ch_name)})
 
@@ -409,10 +414,11 @@ def api_dashboard():
     outliers = detect_outliers(channels)
 
     return jsonify({
-        "total_subs":   fmt(total_subs),
-        "total_views":  fmt(total_views),
-        "total_rev":    fmt_usd(total_rev_filtered),
-        "n_channels":   len(channels),
+        "total_subs":    fmt(total_subs),
+        "total_views":   fmt(total_views),
+        "period_views":  fmt(period_views),
+        "total_rev":     fmt_usd(total_rev_filtered),
+        "n_channels":    len(channels),
         "outliers":     outliers,
         "rev_rows":     rev_rows,
         "channel_rows": channel_rows,
