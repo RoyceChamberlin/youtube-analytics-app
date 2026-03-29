@@ -390,6 +390,22 @@ def api_dashboard():
                 "high":  fmt_usd(tv*5.0/1000),
             })
 
+    # Channel summary rows filtered by time
+    channel_rows = []
+    for ch_name, info in channels.items():
+        fvids = filter_videos(info["videos"], preset)
+        tv = sum(v["views"] for v in fvids)
+        channel_rows.append({
+            "name":         ch_name,
+            "display":      info["stats"].get("channel_name", ch_name),
+            "subscribers":  fmt(info["stats"].get("subscribers", 0)),
+            "total_views":  fmt(info["stats"].get("total_views", 0)),
+            "filtered_views": fmt(tv),
+            "n_videos":     len(fvids),
+            "est_rev":      fmt_usd(int(tv * 3.5 / 1000)),
+            "last_refreshed": info["last_refreshed"],
+        })
+
     outliers = detect_outliers(channels)
 
     return jsonify({
@@ -399,6 +415,7 @@ def api_dashboard():
         "n_channels":   len(channels),
         "outliers":     outliers,
         "rev_rows":     rev_rows,
+        "channel_rows": channel_rows,
         "top_momentum": [{
             "title":     v["title"],
             "channel":   v["channel"],
@@ -418,7 +435,7 @@ def api_dashboard():
 def api_channel(ch_name):
     if not logged_in(): return jsonify({"error":"unauthorized"}),401
     preset   = request.args.get("time","All")
-    sort     = request.args.get("sort","views")
+    sort     = request.args.get("sort","pub")
     channels = load_channels()
     if ch_name not in channels: return jsonify({"error":"not found"}),404
 
@@ -441,8 +458,8 @@ def api_channel(ch_name):
 
     # Sort
     sort_map = {"views":"views","vpd":"views_per_day","likes":"likes","lr":"like_rate","pub":"published"}
-    sort_key = sort_map.get(sort,"views")
-    videos_sorted = sorted(videos, key=lambda x:x.get(sort_key,0), reverse=(sort_key!="published"))
+    sort_key = sort_map.get(sort,"published")
+    videos_sorted = sorted(videos, key=lambda x:x.get(sort_key,0), reverse=True)
 
     return jsonify({
         "name":     ch_name,
@@ -453,11 +470,14 @@ def api_channel(ch_name):
         "stats":    build_stats(videos, info["stats"]),
         "videos":   [{
             "title":    v["title"],
+            "channel":  info["stats"].get("channel_name", ch_name),
             "published":v["published"],
             "views":    fmt(v["views"]),
             "views_raw":v["views"],
             "likes":    fmt(v["likes"]),
+            "likes_raw":v["likes"],
             "comments": fmt(v["comments"]),
+            "comments_raw":v["comments"],
             "vpd":      f"{v['views_per_day']:.1f}",
             "lr":       f"{v['like_rate']:.2f}%",
             "cr":       f"{v['comment_rate']:.2f}%",

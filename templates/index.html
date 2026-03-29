@@ -249,6 +249,17 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--font);min-hei
   </div>
 </div>
 
+<!-- VIDEO DETAIL MODAL -->
+<div class="modal-bg" id="vid-modal-bg" onclick="closeVidModal(event)">
+  <div class="modal" id="vid-modal" style="max-width:560px">
+    <div class="modal-head">
+      <span class="modal-title" id="vid-modal-title">Video Details</span>
+      <button class="modal-close" onclick="closeVidModal()">×</button>
+    </div>
+    <div class="modal-body" id="vid-modal-body"></div>
+  </div>
+</div>
+
 <!-- BUBBLE CHART MODAL -->
 <div class="modal-bg" id="modal-bg" onclick="closeModal(event)">
   <div class="modal" id="modal">
@@ -351,22 +362,10 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--font);min-hei
     <div class="tbl-wrap">
       <table class="tbl">
         <thead><tr>
-          <th>Channel</th><th>Subscribers</th><th>Total Views</th>
+          <th>Channel</th><th>Subscribers</th><th>Views (Period)</th>
           <th class="hm">Videos</th><th>Est Revenue</th><th class="hm">Last Refreshed</th>
         </tr></thead>
-        <tbody>
-          {% for ch_name, info in channels.items() %}
-          {% set tv = info.videos | sum(attribute='views') %}
-          <tr style="cursor:pointer" onclick="pickChannel('{{ ch_name | e }}');showTab('detail')">
-            <td style="padding:9px 11px;font-weight:600">{{ info.stats.get('channel_name',ch_name) }}</td>
-            <td class="vt-num">{{ '{:,}'.format(info.stats.get('subscribers',0)) }}</td>
-            <td class="vt-num">{{ '{:,}'.format(info.stats.get('total_views',0)) }}</td>
-            <td class="vt-num hm">{{ info.videos|length }}</td>
-            <td class="vt-num" style="color:var(--gold)">${{ (tv*3.5/1000)|int }}+</td>
-            <td class="vt-num hm" style="color:var(--muted)">{{ info.last_refreshed }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
+        <tbody id="channels-tbody"><tr><td colspan="6" style="padding:14px;color:var(--muted);text-align:center">Loading...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -405,10 +404,10 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--font);min-hei
       <div class="sort-row">
         <label>Sort by</label>
         <select class="sel" id="sort-sel" onchange="sortVids(this.value)">
+          <option value="pub" selected>Published (Newest)</option>
           <option value="views">Views</option>
           <option value="vpd">Views/Day</option>
           <option value="lr">Like Rate</option>
-          <option value="pub">Published</option>
         </select>
       </div>
       <div class="tbl-wrap">
@@ -430,10 +429,10 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--font);min-hei
 
     <!-- Charts -->
     <div class="tab-pane" id="sub-charts" style="padding:14px 0 0">
-      <div class="chart-box"><div class="chart-title">Top 10 by Total Views</div><canvas id="c-top-views" height="240"></canvas></div>
-      <div class="chart-box"><div class="chart-title">Top 10 by Momentum (V/Day)</div><canvas id="c-top-vpd" height="240"></canvas></div>
-      <div class="chart-box"><div class="chart-title">Views Per Video Over Time</div><canvas id="c-trend" height="200"></canvas></div>
-      <div class="chart-box"><div class="chart-title">Est. Revenue — Top 15 ($3.50 RPM)</div><canvas id="c-rev" height="240"></canvas></div>
+      <div class="chart-box"><div class="chart-title">Top 10 by Total Views</div><div style="position:relative;height:240px"><canvas id="c-top-views"></canvas></div></div>
+      <div class="chart-box"><div class="chart-title">Top 10 by Momentum (V/Day)</div><div style="position:relative;height:240px"><canvas id="c-top-vpd"></canvas></div></div>
+      <div class="chart-box"><div class="chart-title">Views Per Video Over Time</div><div style="position:relative;height:200px"><canvas id="c-trend"></canvas></div></div>
+      <div class="chart-box"><div class="chart-title">Est. Revenue — Top 15 ($3.50 RPM)</div><div style="position:relative;height:240px"><canvas id="c-rev"></canvas></div></div>
       <p style="font-size:10px;color:#2a2a2a;margin-bottom:14px">⚠️ Revenue estimates use $3.50 RPM. Actual revenue varies.</p>
     </div>
 
@@ -447,9 +446,9 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--font);min-hei
           <div class="bd-sub" id="bd-sub"></div>
         </div>
       </div>
-      <div class="chart-box"><div class="chart-title">Avg Views by Upload Day</div><canvas id="c-day" height="200"></canvas></div>
-      <div class="chart-box"><div class="chart-title">Videos Posted per Month</div><canvas id="c-mo-cnt" height="180"></canvas></div>
-      <div class="chart-box"><div class="chart-title">Avg Views per Month</div><canvas id="c-mo-avg" height="180"></canvas></div>
+      <div class="chart-box"><div class="chart-title">Avg Views by Upload Day</div><div style="position:relative;height:200px"><canvas id="c-day"></canvas></div></div>
+      <div class="chart-box"><div class="chart-title">Videos Posted per Month</div><div style="position:relative;height:180px"><canvas id="c-mo-cnt"></canvas></div></div>
+      <div class="chart-box"><div class="chart-title">Avg Views per Month</div><div style="position:relative;height:180px"><canvas id="c-mo-avg"></canvas></div></div>
     </div>
 
     <!-- Notes -->
@@ -489,7 +488,7 @@ function closeDrawer(){
   ['drawer','backdrop'].forEach(id=>document.getElementById(id).classList.remove('open'));
   document.getElementById('ham').classList.remove('open');
 }
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeModal(); closeDrawer(); }});
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeModal(); closeVidModal(); closeDrawer(); }});
 
 // ── TABS ───────────────────────────────────────────────────
 function showTab(name){
@@ -552,8 +551,22 @@ function loadDashboard(){
       renderOutliers(d.outliers);
       renderRevTable(d.rev_rows);
       renderMomentum(d.top_momentum);
+      renderAllChannels(d.channel_rows||[]);
     })
     .catch(()=>{});
+}
+
+function renderAllChannels(rows){
+  document.getElementById('channels-tbody').innerHTML = rows.length
+    ? rows.map(r=>`<tr style="cursor:pointer" onclick="pickChannel(${JSON.stringify(r.name)});showTab('detail')">
+        <td style="padding:9px 11px;font-weight:600">${esc(r.display)}</td>
+        <td class="vt-num">${r.subscribers}</td>
+        <td class="vt-num">${r.filtered_views}</td>
+        <td class="vt-num hm">${r.n_videos}</td>
+        <td class="vt-num" style="color:var(--gold)">${r.est_rev}</td>
+        <td class="vt-num hm" style="color:var(--muted)">${r.last_refreshed}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" style="padding:14px;color:var(--muted);text-align:center">No data — refresh channels</td></tr>';
 }
 
 function renderOutliers(list){
@@ -617,7 +630,7 @@ function renderMomentum(list){
 function loadChannel(name){
   CURRENT=name;
   document.getElementById('ch-status').textContent='Loading...';
-  const sort=document.getElementById('sort-sel')?.value||'views';
+  const sort=document.getElementById('sort-sel')?.value||'pub';
   fetch(`/api/channel/${encodeURIComponent(name)}?time=${TIME}&sort=${sort}`)
     .then(r=>r.json())
     .then(d=>{
@@ -650,15 +663,17 @@ function sortVids(sort){ if(CURRENT){ VID_PAGE=0; loadChannel(CURRENT); } }
 function renderVids(){
   const slice=ALL_VIDS.slice(VID_PAGE*PER,(VID_PAGE+1)*PER);
   document.getElementById('vid-tbody').innerHTML = slice.length
-    ? slice.map(v=>{
+    ? slice.map((v,i)=>{
+        const globalIdx = VID_PAGE*PER+i;
         const thumb=v.thumbnail?`<img class="vt-thumb" src="${v.thumbnail}" loading="lazy">`:`<div class="vt-thumb-ph">▶</div>`;
         const badge=v.badge?`<span class="badge badge-${v.badge.toLowerCase()}">${v.badge}</span>`:'';
-        return `<tr>
-          <td style="padding:7px 8px;width:108px"><a href="${v.url}" target="_blank">${thumb}</a></td>
+        return `<tr style="cursor:pointer" onclick="openVidModal(${globalIdx})">
+          <td style="padding:7px 8px;width:108px">${thumb}</td>
           <td class="vt-body">
+            <div class="vt-ch">${esc(v.channel||'')}</div>
             <div class="vt-title">${esc(v.title)}</div>
             <div class="vt-date">${v.published} · ${v.days}d ago</div>
-            ${badge}<a class="vt-link" href="${v.url}" target="_blank">WATCH ↗</a>
+            ${badge}
           </td>
           <td class="vt-num">${v.views}</td>
           <td class="vt-num hm">${v.likes}</td>
@@ -676,6 +691,35 @@ function renderVids(){
   document.getElementById('pag-next').disabled=VID_PAGE>=tp-1;
 }
 function chPage(d){ VID_PAGE+=d; renderVids(); }
+
+// ── VIDEO MODAL ────────────────────────────────────────────
+function openVidModal(idx){
+  const v = ALL_VIDS[idx];
+  if(!v) return;
+  const badge = v.badge ? `<span class="badge badge-${v.badge.toLowerCase()}" style="font-size:10px">${v.badge}</span>` : '';
+  document.getElementById('vid-modal-title').textContent = v.channel || 'Video Details';
+  document.getElementById('vid-modal-body').innerHTML = `
+    ${v.thumbnail ? `<img src="${v.thumbnail}" style="width:100%;border-radius:8px;margin-bottom:14px;display:block">` : ''}
+    <div style="font-size:14px;font-weight:600;color:#fff;line-height:1.5;margin-bottom:6px">${esc(v.title)}</div>
+    <div style="font-size:11px;color:var(--red);font-weight:700;font-family:var(--mono);margin-bottom:4px">${esc(v.channel||'')}</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px">${v.published} &nbsp;·&nbsp; ${v.days} days ago &nbsp;${badge}</div>
+    <div class="modal-stat-row">
+      <div class="modal-stat"><div class="modal-stat-lbl">Views</div><div class="modal-stat-val" style="color:var(--red)">${v.views}</div></div>
+      <div class="modal-stat"><div class="modal-stat-lbl">Likes</div><div class="modal-stat-val" style="color:var(--blue)">${v.likes}</div></div>
+      <div class="modal-stat"><div class="modal-stat-lbl">Comments</div><div class="modal-stat-val" style="color:var(--gold)">${v.comments}</div></div>
+      <div class="modal-stat"><div class="modal-stat-lbl">Views / Day</div><div class="modal-stat-val" style="color:var(--green)">${v.vpd}</div></div>
+      <div class="modal-stat"><div class="modal-stat-lbl">Like Rate</div><div class="modal-stat-val">${v.lr}</div></div>
+      <div class="modal-stat"><div class="modal-stat-lbl">Comment Rate</div><div class="modal-stat-val">${v.cr}</div></div>
+    </div>
+    <a href="${v.url}" target="_blank" style="display:inline-block;margin-top:4px;padding:9px 20px;background:var(--red);color:#fff;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none;box-shadow:0 0 14px var(--rg)">▶ Watch on YouTube</a>
+  `;
+  document.getElementById('vid-modal-bg').classList.add('open');
+}
+
+function closeVidModal(e){
+  if(e && e.target !== document.getElementById('vid-modal-bg')) return;
+  document.getElementById('vid-modal-bg').classList.remove('open');
+}
 
 // ── CHARTS ─────────────────────────────────────────────────
 const CD={
