@@ -2,269 +2,205 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Chamberlin Media Monitor</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-/* ── RESET & VARS ── */
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
   --bg:#000;--bg2:#080808;--bg3:#0d0d0d;--bg4:#111;--bg5:#161616;
   --border:#1a1a1a;--border2:#242424;
   --text:#e8e8e8;--muted:#555;--dim:#2a2a2a;
-  --red:#ff2244;--rg:rgba(255,34,68,.2);
-  --blue:#00aaff;--bg_:rgba(0,170,255,.15);
-  --green:#00ff88;--gg:rgba(0,255,136,.15);
-  --gold:#ffaa00;--yg:rgba(255,170,0,.15);
+  --red:#ff2244;--rg:rgba(255,34,68,.22);
+  --blue:#00aaff;--blg:rgba(0,170,255,.18);
+  --green:#00ff88;--grg:rgba(0,255,136,.18);
+  --gold:#ffaa00;--glg:rgba(255,170,0,.18);
   --font:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;
   --r:10px;--rs:7px;
 }
-html,body{background:var(--bg);color:var(--text);font-family:var(--font);height:100%;overflow-x:hidden}
+html,body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;overflow-x:hidden}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:var(--bg)}
 ::-webkit-scrollbar-thumb{background:#1e1e1e;border-radius:3px}
 
-/* ── LAYOUT ── */
-.app{display:flex;min-height:100vh}
-.main{flex:1;padding:0;overflow-x:hidden}
-.top-bar{height:54px;display:flex;align-items:center;gap:16px;padding:0 20px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;background:rgba(0,0,0,.95);backdrop-filter:blur(10px)}
-.top-bar h1{font-size:15px;font-weight:600;color:#fff;margin-left:8px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* TOP BAR */
+.top-bar{height:52px;display:flex;align-items:center;gap:12px;padding:0 18px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:200;background:rgba(0,0,0,.96);backdrop-filter:blur(12px)}
+.top-bar h1{font-size:14px;font-weight:600;color:#fff;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .top-badge{font-family:var(--mono);font-size:9px;font-weight:600;color:var(--muted);background:var(--bg4);border:1px solid var(--border2);border-radius:4px;padding:3px 8px;white-space:nowrap}
-.content{padding:20px}
 
-/* ── HAMBURGER ── */
-.ham{
-  width:38px;height:38px;background:var(--bg3);border:1px solid var(--border2);
-  border-radius:9px;display:flex;align-items:center;justify-content:center;
-  cursor:pointer;flex-shrink:0;transition:all .2s;
-}
-.ham:hover,.ham.active{background:var(--red);border-color:var(--red);box-shadow:0 0 20px var(--rg)}
+/* HAMBURGER */
+.ham{width:36px;height:36px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all .2s}
+.ham:hover,.ham.open{background:var(--red);border-color:var(--red);box-shadow:0 0 18px var(--rg)}
+.ham.open svg{transform:rotate(90deg)}
 .ham svg{transition:transform .2s}
-.ham.active svg{transform:rotate(90deg)}
 
-/* ── SIDEBAR DRAWER ── */
-.backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(3px);z-index:998}
+/* SIDEBAR */
+.backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.8);backdrop-filter:blur(3px);z-index:300}
 .backdrop.open{display:block}
-.drawer{
-  position:fixed;top:0;left:-300px;width:280px;height:100vh;
-  background:var(--bg2);border-right:1px solid var(--border);
-  z-index:999;overflow-y:auto;overflow-x:hidden;
-  transition:left .28s cubic-bezier(.4,0,.2,1);
-  display:flex;flex-direction:column;
-}
-.drawer.open{left:0;box-shadow:0 0 60px rgba(0,0,0,.9)}
-.drawer-top{
-  display:flex;align-items:center;gap:10px;padding:16px;
-  border-bottom:1px solid var(--border);flex-shrink:0;
-  position:sticky;top:0;background:var(--bg2);z-index:5;
-}
-.drawer-logo{
-  width:28px;height:28px;background:var(--red);border-radius:7px;
-  display:flex;align-items:center;justify-content:center;
-  font-size:13px;font-weight:900;color:#fff;flex-shrink:0;
-  box-shadow:0 0 14px var(--rg);
-}
+.drawer{position:fixed;top:0;left:-290px;width:272px;height:100vh;background:var(--bg2);border-right:1px solid var(--border);z-index:400;overflow-y:auto;transition:left .26s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column}
+.drawer.open{left:0;box-shadow:0 0 60px rgba(0,0,0,.95)}
+.drawer-top{display:flex;align-items:center;gap:10px;padding:15px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg2);z-index:5;flex-shrink:0}
+.drawer-logo{width:27px;height:27px;background:var(--red);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:#fff;flex-shrink:0;box-shadow:0 0 12px var(--rg)}
 .drawer-title{font-size:13px;font-weight:700;color:#fff}
 .drawer-sub{font-size:8px;color:var(--red);font-weight:700;letter-spacing:1.5px;text-transform:uppercase}
-.drawer-body{padding:14px;flex:1;overflow-y:auto}
-.sb-label{font-family:var(--mono);font-size:8px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:2px;margin:14px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--border)}
-.sb-label:first-child{margin-top:0}
+.sb{padding:12px;flex:1;overflow-y:auto}
+.sb-lbl{font-family:var(--mono);font-size:8px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:2px;margin:12px 0 7px;padding-bottom:5px;border-bottom:1px solid var(--border)}
+.sb-lbl:first-child{margin-top:0}
 
-/* ── TIME CHIPS ── */
-.chips{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px}
-.chip{
-  font-family:var(--mono);font-size:10px;font-weight:600;
-  padding:4px 10px;border-radius:5px;cursor:pointer;
-  background:var(--bg4);border:1px solid var(--border2);
-  color:var(--muted);transition:all .15s;
-}
+/* TIME CHIPS */
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{font-family:var(--mono);font-size:10px;font-weight:600;padding:4px 10px;border-radius:5px;cursor:pointer;background:var(--bg4);border:1px solid var(--border2);color:var(--muted);transition:all .15s}
 .chip:hover{color:var(--text);border-color:#333}
-.chip.on{background:rgba(255,34,68,.1);border-color:rgba(255,34,68,.3);color:var(--red);box-shadow:0 0 10px rgba(255,34,68,.1)}
+.chip.on{background:rgba(255,34,68,.1);border-color:rgba(255,34,68,.3);color:var(--red);box-shadow:0 0 8px rgba(255,34,68,.1)}
 
-/* ── FOLDER BUTTONS ── */
-.folder-btn{
-  display:flex;align-items:center;gap:8px;width:100%;
-  padding:7px 10px;border-radius:7px;cursor:pointer;
-  border:1px solid transparent;background:transparent;
-  color:var(--muted);font-family:var(--font);font-size:12px;font-weight:500;
-  margin-bottom:3px;text-align:left;transition:all .15s;
-}
+/* FOLDER + CHANNEL */
+.folder-btn{display:flex;align-items:center;gap:8px;width:100%;padding:7px 9px;border-radius:7px;cursor:pointer;border:1px solid transparent;background:transparent;color:var(--muted);font-family:var(--font);font-size:12px;font-weight:500;margin-bottom:2px;text-align:left;transition:all .15s}
 .folder-btn:hover{background:var(--bg4);color:var(--text);border-color:var(--border2)}
 .folder-btn.on{background:rgba(255,34,68,.07);border-color:rgba(255,34,68,.2);color:#fff}
 .f-dot{width:6px;height:6px;border-radius:50%;background:var(--dim);flex-shrink:0;transition:background .15s}
-.folder-btn.on .f-dot{background:var(--red);box-shadow:0 0 6px var(--red)}
-
-/* ── CHANNEL PILLS ── */
-.ch-pill{
-  display:flex;align-items:center;gap:8px;padding:8px 10px;
-  border-radius:7px;background:var(--bg3);border:1px solid var(--border);
-  margin-bottom:4px;transition:border-color .15s;cursor:pointer;
-}
+.folder-btn.on .f-dot{background:var(--red);box-shadow:0 0 5px var(--red)}
+.ch-pill{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;background:var(--bg3);border:1px solid var(--border);margin-bottom:3px;cursor:pointer;transition:all .15s}
 .ch-pill:hover{border-color:var(--border2)}
-.ch-pill.selected{border-color:rgba(255,34,68,.3);background:rgba(255,34,68,.04)}
+.ch-pill.on{border-color:rgba(255,34,68,.3);background:rgba(255,34,68,.04)}
 .ch-status{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .ch-status.loaded{background:var(--green);box-shadow:0 0 5px var(--green)}
 .ch-status.empty{background:#222}
 .ch-info{flex:1;min-width:0}
-.ch-name{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ch-name{font-size:11px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ch-subs{font-size:9px;color:var(--muted);font-family:var(--mono)}
-.ch-del{font-size:11px;color:#2a2a2a;background:none;border:none;cursor:pointer;padding:2px 5px;border-radius:3px;transition:all .15s;flex-shrink:0}
+.ch-del{font-size:11px;color:#222;background:none;border:none;cursor:pointer;padding:2px 5px;border-radius:3px;transition:all .15s;flex-shrink:0}
 .ch-del:hover{color:var(--red);background:rgba(255,34,68,.1)}
-
-/* ── ADD CHANNEL ── */
 .add-toggle{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);cursor:pointer;padding:5px 0;background:none;border:none;font-family:var(--font);transition:color .15s}
 .add-toggle:hover{color:var(--text)}
-.add-form{display:none;margin-top:6px}
+.add-form{display:none;margin-top:5px}
 .add-form.open{display:block}
-.add-input{width:100%;background:var(--bg4);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:11px;padding:8px 10px;margin-bottom:6px;outline:none;transition:border-color .2s}
-.add-input:focus{border-color:var(--red);box-shadow:0 0 0 2px rgba(255,34,68,.15)}
-.add-btn{width:100%;padding:8px;border-radius:6px;border:none;cursor:pointer;background:var(--red);color:#fff;font-family:var(--font);font-size:12px;font-weight:600;transition:all .2s;box-shadow:0 0 12px var(--rg)}
-.add-btn:hover{box-shadow:0 0 22px rgba(255,34,68,.4)}
-
-/* ── REFRESH BTN ── */
-.refresh-btn{
-  display:flex;align-items:center;justify-content:center;gap:7px;
-  width:100%;margin-top:14px;padding:10px;
-  border-radius:8px;border:1px solid rgba(255,34,68,.2);
-  background:rgba(255,34,68,.05);color:var(--red);
-  font-family:var(--font);font-size:12px;font-weight:600;
-  cursor:pointer;transition:all .2s;
-}
-.refresh-btn:hover{background:rgba(255,34,68,.1);border-color:rgba(255,34,68,.35);box-shadow:0 0 20px rgba(255,34,68,.1)}
+.add-input{width:100%;background:var(--bg4);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:11px;padding:7px 10px;margin-bottom:5px;outline:none;transition:border-color .2s}
+.add-input:focus{border-color:var(--red);box-shadow:0 0 0 2px rgba(255,34,68,.12)}
+.add-btn{width:100%;padding:8px;border-radius:6px;border:none;cursor:pointer;background:var(--red);color:#fff;font-family:var(--font);font-size:12px;font-weight:600;transition:all .2s;box-shadow:0 0 10px var(--rg)}
+.add-btn:hover{box-shadow:0 0 20px rgba(255,34,68,.4)}
+.refresh-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:12px;padding:9px;border-radius:7px;border:1px solid rgba(255,34,68,.2);background:rgba(255,34,68,.05);color:var(--red);font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;transition:all .2s}
+.refresh-btn:hover{background:rgba(255,34,68,.1);box-shadow:0 0 16px rgba(255,34,68,.1)}
 .refresh-btn.loading{opacity:.5;pointer-events:none}
 
-/* ── TABS ── */
-.tabs{display:flex;border-bottom:1px solid var(--border);overflow-x:auto;flex-wrap:nowrap;-webkit-overflow-scrolling:touch}
-.tab{
-  font-size:13px;font-weight:500;color:var(--muted);
-  padding:12px 18px;cursor:pointer;border-bottom:2px solid transparent;
-  white-space:nowrap;transition:all .15s;flex-shrink:0;
-}
+/* TABS */
+.tab-bar{display:flex;border-bottom:1px solid var(--border);overflow-x:auto;flex-wrap:nowrap;padding:0 18px;-webkit-overflow-scrolling:touch}
+.tab{font-size:12px;font-weight:500;color:var(--muted);padding:11px 16px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s;flex-shrink:0}
 .tab:hover{color:#888}
 .tab.on{color:#fff;border-bottom-color:var(--red)}
-.tab-content{display:none}
-.tab-content.on{display:block;padding-top:20px}
+.tab-pane{display:none;padding:18px}
+.tab-pane.on{display:block}
 
-/* ── GLOW BUBBLES ── */
-.bubbles{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px}
-.bubble{
-  background:var(--bg3);border:1px solid var(--border2);border-radius:12px;
-  padding:16px 18px;flex:1 1 130px;min-width:120px;transition:all .2s;
-}
-.b-label{font-family:var(--mono);font-size:8px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1.4px;margin-bottom:8px}
-.b-value{font-size:22px;font-weight:700;letter-spacing:-.5px;line-height:1;margin-bottom:3px}
+/* GLOW BUBBLES */
+.bubbles{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+.bubble{background:var(--bg3);border:1px solid var(--border2);border-radius:11px;padding:15px 17px;flex:1 1 125px;min-width:115px;transition:all .2s;cursor:pointer;position:relative}
+.bubble:hover{transform:translateY(-1px)}
+.b-lbl{font-family:var(--mono);font-size:8px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:1.4px;margin-bottom:7px}
+.b-val{font-size:22px;font-weight:700;letter-spacing:-.5px;line-height:1;margin-bottom:3px}
 .b-sub{font-size:10px;color:var(--muted)}
-.b-red{border-left:2px solid var(--red)}.b-red .b-value{color:var(--red);text-shadow:0 0 18px var(--rg)}
-.b-red:hover{box-shadow:0 0 20px rgba(255,34,68,.1);border-color:rgba(255,34,68,.35)}
-.b-blue{border-left:2px solid var(--blue)}.b-blue .b-value{color:var(--blue);text-shadow:0 0 18px var(--bg_)}
-.b-blue:hover{box-shadow:0 0 20px rgba(0,170,255,.1);border-color:rgba(0,170,255,.3)}
-.b-green{border-left:2px solid var(--green)}.b-green .b-value{color:var(--green);text-shadow:0 0 18px var(--gg)}
-.b-green:hover{box-shadow:0 0 20px rgba(0,255,136,.08);border-color:rgba(0,255,136,.25)}
-.b-gold{border-left:2px solid var(--gold)}.b-gold .b-value{color:var(--gold);text-shadow:0 0 18px var(--yg)}
-.b-gold:hover{box-shadow:0 0 20px rgba(255,170,0,.08);border-color:rgba(255,170,0,.25)}
-.b-grey{border-left:2px solid #2a2a2a}.b-grey .b-value{color:#888}
+.b-red{border-left:2px solid var(--red)}.b-red .b-val{color:var(--red);text-shadow:0 0 16px var(--rg)}.b-red:hover{box-shadow:0 0 18px rgba(255,34,68,.1);border-color:rgba(255,34,68,.35)}
+.b-blue{border-left:2px solid var(--blue)}.b-blue .b-val{color:var(--blue);text-shadow:0 0 16px var(--blg)}.b-blue:hover{box-shadow:0 0 18px rgba(0,170,255,.1);border-color:rgba(0,170,255,.3)}
+.b-green{border-left:2px solid var(--green)}.b-green .b-val{color:var(--green);text-shadow:0 0 16px var(--grg)}.b-green:hover{box-shadow:0 0 18px rgba(0,255,136,.08);border-color:rgba(0,255,136,.25)}
+.b-gold{border-left:2px solid var(--gold)}.b-gold .b-val{color:var(--gold);text-shadow:0 0 16px var(--glg)}.b-gold:hover{box-shadow:0 0 18px rgba(255,170,0,.08);border-color:rgba(255,170,0,.25)}
+.b-grey{border-left:2px solid #2a2a2a}.b-grey .b-val{color:#888}
 
-/* ── SECTION LABEL ── */
-.slabel{font-family:var(--mono);font-size:8px;font-weight:600;color:#2a2a2a;text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;padding-bottom:7px;border-bottom:1px solid var(--border)}
+/* SECTION LABEL */
+.slabel{font-family:var(--mono);font-size:8px;font-weight:600;color:#2a2a2a;text-transform:uppercase;letter-spacing:2px;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--border)}
 
-/* ── OUTLIER CARDS ── */
-.outlier-card{
-  background:var(--bg3);border:1px solid var(--border2);border-left:2px solid var(--green);
-  border-radius:12px;padding:14px 15px;margin-bottom:8px;
-  display:flex;align-items:flex-start;gap:12px;transition:all .2s;
-}
-.outlier-card:hover{border-color:rgba(0,255,136,.2);box-shadow:0 0 20px rgba(0,255,136,.05)}
-.o-thumb{width:86px;height:49px;object-fit:cover;border-radius:6px;flex-shrink:0;background:var(--bg5);display:block}
-.o-thumb-ph{width:86px;height:49px;background:var(--bg5);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#2a2a2a;font-size:18px;flex-shrink:0}
+/* OUTLIER CARDS */
+.o-card{background:var(--bg3);border:1px solid var(--border2);border-left:2px solid var(--green);border-radius:11px;padding:13px 14px;margin-bottom:8px;display:flex;align-items:flex-start;gap:11px;transition:all .2s}
+.o-card:hover{border-color:rgba(0,255,136,.2);box-shadow:0 0 18px rgba(0,255,136,.05)}
+.o-thumb{width:84px;height:48px;object-fit:cover;border-radius:6px;flex-shrink:0;display:block}
+.o-thumb-ph{width:84px;height:48px;background:var(--bg5);border-radius:6px;display:flex;align-items:center;justify-content:center;color:#2a2a2a;font-size:16px;flex-shrink:0}
 .o-body{flex:1;min-width:0}
-.o-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.18);color:var(--green);padding:2px 8px;border-radius:4px;font-size:8px;font-weight:700;font-family:var(--mono);letter-spacing:.5px;margin-bottom:5px;text-shadow:0 0 8px var(--gg)}
-.o-title{font-size:13px;font-weight:600;color:#fff;line-height:1.4;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.o-ch{font-size:9px;color:var(--red);font-weight:700;font-family:var(--mono);letter-spacing:.3px;margin-bottom:5px}
+.o-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(0,255,136,.07);border:1px solid rgba(0,255,136,.16);color:var(--green);padding:2px 7px;border-radius:4px;font-size:8px;font-weight:700;font-family:var(--mono);letter-spacing:.5px;margin-bottom:4px}
+.o-title{font-size:12px;font-weight:600;color:#fff;line-height:1.4;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.o-ch{font-size:9px;color:var(--red);font-weight:700;font-family:var(--mono);margin-bottom:4px}
 .o-stats{display:flex;gap:12px;flex-wrap:wrap}
-.o-stat{font-family:var(--mono);font-size:9px;color:var(--muted)}
-.o-stat span{color:#ccc;font-weight:600}
+.o-stat{font-family:var(--mono);font-size:9px;color:var(--muted)}.o-stat span{color:#ccc;font-weight:600}
 
-/* ── REVENUE TABLE ── */
-.rev-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:8px}
-.rev-table th{text-align:left;font-family:var(--mono);font-size:8px;font-weight:600;color:#2a2a2a;text-transform:uppercase;letter-spacing:1px;padding:8px 12px;border-bottom:1px solid var(--border)}
-.rev-table td{padding:9px 12px;border-bottom:1px solid var(--border);color:var(--text)}
-.rev-table tr:hover td{background:var(--bg3)}
-.rev-table .mono{font-family:var(--mono);color:#888}
-
-/* ── VIDEO TABLE ── */
-.vid-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:var(--r);margin-bottom:14px}
-.vid-table{width:100%;border-collapse:collapse;min-width:480px}
-.vid-table th{background:var(--bg3);text-align:right;font-family:var(--mono);font-size:8px;font-weight:600;color:#2a2a2a;text-transform:uppercase;letter-spacing:1px;padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0}
-.vid-table th:nth-child(1),.vid-table th:nth-child(2){text-align:left}
-.vid-table td{border-bottom:1px solid #0d0d0d;vertical-align:middle}
-.vid-table tr:hover td{background:#080808}
-.vid-table tr:last-child td{border-bottom:none}
-.vt-thumb{width:96px;height:54px;object-fit:cover;border-radius:5px;display:block}
-.vt-thumb-ph{width:96px;height:54px;background:var(--bg5);border-radius:5px;display:flex;align-items:center;justify-content:center;color:#222;font-size:16px}
+/* TABLE */
+.tbl-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r);-webkit-overflow-scrolling:touch}
+.tbl{width:100%;border-collapse:collapse;min-width:440px}
+.tbl th{background:var(--bg3);text-align:right;font-family:var(--mono);font-size:8px;font-weight:600;color:#2a2a2a;text-transform:uppercase;letter-spacing:1px;padding:9px 11px;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0}
+.tbl th:nth-child(1),.tbl th:nth-child(2){text-align:left}
+.tbl td{border-bottom:1px solid #0a0a0a;vertical-align:middle}
+.tbl tr:hover td{background:#080808}
+.tbl tr:last-child td{border-bottom:none}
+.vt-thumb{width:92px;height:52px;object-fit:cover;border-radius:5px;display:block}
+.vt-thumb-ph{width:92px;height:52px;background:var(--bg5);border-radius:5px;display:flex;align-items:center;justify-content:center;color:#222;font-size:15px}
 .vt-body{padding:7px 10px}
 .vt-ch{font-size:9px;color:var(--red);font-weight:700;margin-bottom:2px;font-family:var(--mono)}
 .vt-title{font-size:12px;font-weight:600;color:#e8e8e8;line-height:1.4;margin-bottom:2px}
 .vt-date{font-size:9px;color:#333;margin-bottom:3px}
-.vt-link{color:var(--red);font-size:9px;font-weight:700;text-decoration:none;letter-spacing:.3px}
+.vt-link{color:var(--red);font-size:9px;font-weight:700;text-decoration:none}
 .vt-num{text-align:right;font-family:var(--mono);font-size:11px;color:#aaa;white-space:nowrap;padding:7px 10px}
-.badge{display:inline-block;padding:1px 7px;border-radius:3px;font-size:8px;font-weight:700;font-family:var(--mono);letter-spacing:.4px;margin-right:4px}
-.badge-new{background:rgba(0,170,255,.12);color:#00aaff;border:1px solid rgba(0,170,255,.25)}
-.badge-hot{background:rgba(255,34,68,.12);color:#ff2244;border:1px solid rgba(255,34,68,.25)}
-.badge-ever{background:rgba(0,255,136,.1);color:#00ff88;border:1px solid rgba(0,255,136,.2)}
-@media(max-width:600px){.hide-mobile{display:none}}
+.badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:8px;font-weight:700;font-family:var(--mono);letter-spacing:.4px;margin-right:3px}
+.badge-new{background:rgba(0,170,255,.1);color:#00aaff;border:1px solid rgba(0,170,255,.2)}
+.badge-hot{background:rgba(255,34,68,.1);color:#ff2244;border:1px solid rgba(255,34,68,.2)}
+.badge-evergreen{background:rgba(0,255,136,.08);color:#00ff88;border:1px solid rgba(0,255,136,.18)}
+@media(max-width:580px){.hm{display:none}}
 
-/* ── PAGINATION ── */
+/* PAGINATION */
 .pag{display:flex;align-items:center;gap:8px;margin-top:10px}
-.pag-btn{background:var(--bg4);border:1px solid var(--border2);color:var(--muted);padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;transition:all .15s}
+.pag-btn{background:var(--bg4);border:1px solid var(--border2);color:var(--muted);padding:5px 12px;border-radius:6px;font-size:11px;cursor:pointer;transition:all .15s}
 .pag-btn:hover:not(:disabled){background:var(--bg5);color:var(--text)}
 .pag-btn:disabled{opacity:.3;cursor:default}
 .pag-info{font-family:var(--mono);font-size:10px;color:var(--muted);flex:1;text-align:center}
 
-/* ── CHARTS ── */
-.chart-box{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:14px}
-.chart-title{font-size:12px;font-weight:600;color:#888;margin-bottom:12px;font-family:var(--mono)}
-.chart-wrap{position:relative}
+/* CHART BOX */
+.chart-box{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:15px;margin-bottom:12px}
+.chart-title{font-size:11px;font-weight:600;color:#555;margin-bottom:12px;font-family:var(--mono)}
 
-/* ── BEST DAY ── */
-.best-day{background:var(--bg3);border:1px solid rgba(0,255,136,.12);border-radius:var(--r);padding:14px 18px;display:flex;align-items:center;gap:14px;margin-bottom:14px;box-shadow:0 0 20px rgba(0,255,136,.04)}
-.bd-label{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-family:var(--mono);margin-bottom:3px}
-.bd-value{font-size:22px;font-weight:700;color:var(--green);text-shadow:0 0 14px var(--gg)}
+/* BEST DAY */
+.best-day{background:var(--bg3);border:1px solid rgba(0,255,136,.12);border-radius:var(--r);padding:13px 17px;display:flex;align-items:center;gap:13px;margin-bottom:12px}
+.bd-lbl{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-family:var(--mono);margin-bottom:3px}
+.bd-val{font-size:20px;font-weight:700;color:var(--green);text-shadow:0 0 12px var(--grg)}
 .bd-sub{font-size:10px;color:var(--muted)}
 
-/* ── TAGS ── */
+/* TAGS */
 .tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px}
 .tag{background:var(--bg4);border:1px solid var(--border2);color:var(--muted);padding:3px 9px;border-radius:20px;font-size:10px;font-weight:500;font-family:var(--mono)}
 .tag-hot{border-color:rgba(255,34,68,.25);color:#ff6680;background:rgba(255,34,68,.05)}
 
-/* ── NOTES ── */
-.notes-area{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--rs);color:var(--text);font-family:var(--mono);font-size:12px;line-height:1.7;padding:12px;resize:vertical;min-height:160px;outline:none;transition:border-color .2s}
-.notes-area:focus{border-color:var(--red);box-shadow:0 0 0 2px rgba(255,34,68,.12)}
-.save-btn{margin-top:8px;padding:9px 20px;border-radius:7px;border:none;cursor:pointer;background:var(--red);color:#fff;font-family:var(--font);font-size:12px;font-weight:600;transition:all .2s;box-shadow:0 0 12px var(--rg)}
-.save-btn:hover{box-shadow:0 0 22px rgba(255,34,68,.4)}
+/* NOTES */
+.notes-area{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--rs);color:var(--text);font-family:var(--mono);font-size:12px;line-height:1.7;padding:12px;resize:vertical;min-height:150px;outline:none;transition:border-color .2s}
+.notes-area:focus{border-color:var(--red);box-shadow:0 0 0 2px rgba(255,34,68,.1)}
+.save-btn{margin-top:8px;padding:8px 18px;border-radius:7px;border:none;cursor:pointer;background:var(--red);color:#fff;font-family:var(--font);font-size:12px;font-weight:600;transition:all .2s;box-shadow:0 0 10px var(--rg)}
+.save-btn:hover{box-shadow:0 0 20px rgba(255,34,68,.4)}
 
-/* ── TOAST ── */
-.toast{position:fixed;bottom:20px;right:20px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 16px;font-size:13px;color:var(--text);z-index:9999;opacity:0;transform:translateY(10px);transition:all .3s;pointer-events:none}
+/* SORT ROW */
+.sort-row{display:flex;align-items:center;gap:8px;margin-bottom:11px}
+.sort-row label{font-size:11px;color:var(--muted)}
+.sel{background:var(--bg4);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:11px;padding:5px 10px;outline:none;cursor:pointer}
+
+/* ── MODAL (bubble popup) ── */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);backdrop-filter:blur(6px);z-index:900;align-items:center;justify-content:center;padding:20px}
+.modal-bg.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;box-shadow:0 0 80px rgba(0,0,0,.9)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg2);z-index:5}
+.modal-title{font-size:13px;font-weight:700;color:#fff}
+.modal-close{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0 4px;line-height:1;transition:color .15s}
+.modal-close:hover{color:var(--red)}
+.modal-body{padding:18px}
+.modal-stat-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+.modal-stat{background:var(--bg4);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;flex:1 1 100px;min-width:90px}
+.modal-stat-lbl{font-family:var(--mono);font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:1.2px;margin-bottom:4px}
+.modal-stat-val{font-size:16px;font-weight:700;color:#fff}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 16px;font-size:12px;color:var(--text);z-index:1000;opacity:0;transform:translateY(8px);transition:all .3s;pointer-events:none}
 .toast.show{opacity:1;transform:translateY(0)}
 .toast.ok{border-color:rgba(0,255,136,.3);color:var(--green)}
 .toast.err{border-color:rgba(255,34,68,.3);color:#ff6680}
-
-/* ── LOADING SPINNER ── */
-.spin{display:inline-block;width:14px;height:14px;border:2px solid #222;border-top-color:var(--red);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid #222;border-top-color:var(--red);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
 @keyframes spin{to{transform:rotate(360deg)}}
-
-/* ── SORT SELECT ── */
-.sort-row{display:flex;align-items:center;gap:8px;margin-bottom:12px}
-.sort-row label{font-size:11px;color:var(--muted)}
-.sort-sel{background:var(--bg4);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:11px;padding:5px 10px;outline:none;cursor:pointer}
 </style>
 </head>
 <body>
 
-<!-- DRAWER BACKDROP -->
+<!-- BACKDROP + DRAWER -->
 <div class="backdrop" id="backdrop" onclick="closeDrawer()"></div>
-
-<!-- SIDEBAR DRAWER -->
 <div class="drawer" id="drawer">
   <div class="drawer-top">
     <div class="drawer-logo">▶</div>
@@ -273,357 +209,272 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--font);height:
       <div class="drawer-sub">Media Monitor</div>
     </div>
   </div>
-  <div class="drawer-body">
-
-    <!-- Time filter -->
-    <div class="sb-label">Time Filter</div>
-    <div class="chips" id="time-chips">
-      {% for preset in ["7d","30d","90d","6mo","1yr","All"] %}
-      <div class="chip" data-preset="{{ preset }}" onclick="setTime('{{ preset }}')">{{ preset }}</div>
+  <div class="sb">
+    <div class="sb-lbl">Time Filter</div>
+    <div class="chips">
+      {% for p in ["7d","30d","90d","6mo","1yr","All"] %}
+      <div class="chip" data-p="{{ p }}" onclick="setTime('{{ p }}')">{{ p }}</div>
       {% endfor %}
     </div>
 
-    <!-- Folders -->
     {% if folders %}
-    <div class="sb-label">Client Folders</div>
-    <button class="folder-btn" data-folder="" onclick="setFolder('')">
-      <span class="f-dot"></span>All Channels
-    </button>
+    <div class="sb-lbl">Client Folders</div>
+    <button class="folder-btn on" data-f="" onclick="setFolder('')"><span class="f-dot"></span>All Channels</button>
     {% for fname in folders %}
-    <button class="folder-btn" data-folder="{{ fname }}" onclick="setFolder('{{ fname }}')">
-      <span class="f-dot"></span>{{ fname }}
-    </button>
+    <button class="folder-btn" data-f="{{ fname }}" onclick="setFolder('{{ fname }}')"><span class="f-dot"></span>{{ fname }}</button>
     {% endfor %}
     {% endif %}
 
-    <!-- Channels -->
-    <div class="sb-label">Channels</div>
+    <div class="sb-lbl">Channels</div>
     {% for ch_name, info in channels.items() %}
-    <div class="ch-pill" data-ch="{{ ch_name }}" onclick="selectChannel('{{ ch_name | e }}')">
+    <div class="ch-pill" data-ch="{{ ch_name }}" onclick="pickChannel('{{ ch_name | e }}')">
       <span class="ch-status {{ 'loaded' if info.videos else 'empty' }}"></span>
       <div class="ch-info">
         <div class="ch-name">{{ info.stats.get('channel_name', ch_name) }}</div>
         <div class="ch-subs">{{ '{:,}'.format(info.stats.get('subscribers',0)) if info.stats.get('subscribers') else '—' }} subs</div>
       </div>
-      <button class="ch-del" onclick="event.stopPropagation();deleteChannel('{{ ch_name | e }}')" title="Remove">✕</button>
+      <button class="ch-del" onclick="event.stopPropagation();delChannel('{{ ch_name | e }}')">✕</button>
     </div>
     {% endfor %}
 
-    <!-- Add channel -->
     <button class="add-toggle" onclick="toggleAdd()">＋ Add channel</button>
     <div class="add-form" id="add-form">
-      <input class="add-input" id="add-ch-input" placeholder="Channel ID  (UCxxxxxxxx)">
+      <input class="add-input" id="add-input" placeholder="Channel ID  (UCxxxxxxxx)">
       <button class="add-btn" onclick="addChannel()">Add Channel</button>
     </div>
-
-    <!-- Refresh -->
-    <button class="refresh-btn" id="refresh-btn" onclick="refreshAll()">
-      ↺ &nbsp;Refresh All Channels
-    </button>
-
-    <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+    <button class="refresh-btn" id="refresh-btn" onclick="refreshAll()">↺ &nbsp;Refresh All Channels</button>
+    <div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--border)">
       <a href="/logout" style="font-size:11px;color:var(--muted);text-decoration:none">Sign out</a>
     </div>
   </div>
 </div>
 
-<!-- MAIN APP -->
-<div class="app">
-  <div class="main">
-
-    <!-- TOP BAR -->
-    <div class="top-bar">
-      <div class="ham" id="ham" onclick="toggleDrawer()">
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-          <rect y="3" width="18" height="1.5" rx=".75" fill="#e8e8e8"/>
-          <rect y="8.25" width="18" height="1.5" rx=".75" fill="#e8e8e8"/>
-          <rect y="13.5" width="18" height="1.5" rx=".75" fill="#e8e8e8"/>
-        </svg>
-      </div>
-      <h1 id="page-title">Dashboard</h1>
-      <span class="top-badge" id="time-badge">All Time</span>
+<!-- BUBBLE CHART MODAL -->
+<div class="modal-bg" id="modal-bg" onclick="closeModal(event)">
+  <div class="modal" id="modal">
+    <div class="modal-head">
+      <span class="modal-title" id="modal-title">Chart</span>
+      <button class="modal-close" onclick="closeModal()">×</button>
     </div>
-
-    <!-- TABS -->
-    <div style="padding:0 20px;border-bottom:1px solid var(--border)">
-      <div class="tabs" style="border:none">
-        <div class="tab on" onclick="showTab('dashboard')">Dashboard</div>
-        <div class="tab" onclick="showTab('channels')">All Channels</div>
-        <div class="tab" onclick="showTab('detail')">Channel Detail</div>
-      </div>
+    <div class="modal-body" id="modal-body">
+      <div class="modal-stat-row" id="modal-stats"></div>
+      <div class="chart-box" style="margin-bottom:0"><canvas id="modal-chart" height="220"></canvas></div>
     </div>
+  </div>
+</div>
 
-    <div class="content">
+<!-- TOP BAR -->
+<div class="top-bar">
+  <div class="ham" id="ham" onclick="toggleDrawer()">
+    <svg width="17" height="17" viewBox="0 0 17 17" fill="none">
+      <rect y="2.5" width="17" height="1.5" rx=".75" fill="#e8e8e8"/>
+      <rect y="7.75" width="17" height="1.5" rx=".75" fill="#e8e8e8"/>
+      <rect y="13" width="17" height="1.5" rx=".75" fill="#e8e8e8"/>
+    </svg>
+  </div>
+  <h1 id="page-title">Dashboard</h1>
+  <span class="top-badge" id="time-badge">All Time</span>
+</div>
 
-      <!-- ═══ DASHBOARD TAB ═══ -->
-      <div class="tab-content on" id="tab-dashboard">
+<!-- MAIN TABS -->
+<div class="tab-bar">
+  <div class="tab on"  onclick="showTab('dash')">Dashboard</div>
+  <div class="tab"     onclick="showTab('channels')">All Channels</div>
+  <div class="tab"     onclick="showTab('detail')">Channel Detail</div>
+</div>
 
-        <!-- Stat bubbles -->
-        <div class="bubbles">
-          <div class="bubble b-red">
-            <div class="b-label">Subscribers</div>
-            <div class="b-value">{{ total_subs }}</div>
-            <div class="b-sub">across all channels</div>
-          </div>
-          <div class="bubble b-blue">
-            <div class="b-label">Total Views</div>
-            <div class="b-value">{{ total_views }}</div>
-            <div class="b-sub">lifetime</div>
-          </div>
-          <div class="bubble b-gold">
-            <div class="b-label">Est. Revenue</div>
-            <div class="b-value">{{ total_rev }}</div>
-            <div class="b-sub">~$3.50 RPM</div>
-          </div>
-          <div class="bubble b-green">
-            <div class="b-label">Channels</div>
-            <div class="b-value">{{ n_channels }}</div>
-            <div class="b-sub">being tracked</div>
-          </div>
-        </div>
+<!-- ═══ DASHBOARD ═══ -->
+<div class="tab-pane on" id="pane-dash">
 
-        <!-- Outlier Tracker -->
-        <div class="slabel">⚡ Outlier Tracker — Old Videos Spiking</div>
-        {% if outliers %}
-          {% for o in outliers %}
-          <div class="outlier-card">
-            <a href="{{ o.url }}" target="_blank">
-              {% if o.thumbnail %}
-              <img class="o-thumb" src="{{ o.thumbnail }}" loading="lazy" alt="">
-              {% else %}
-              <div class="o-thumb-ph">▶</div>
-              {% endif %}
-            </a>
-            <div class="o-body">
-              <div class="o-badge">⚡ {{ o.ratio }}× above median</div>
-              <div class="o-title" title="{{ o.title }}">{{ o.title }}</div>
-              <div class="o-ch">{{ o.ch_display }}</div>
-              <div class="o-stats">
-                <div class="o-stat">Views <span>{{ o.views }}</span></div>
-                <div class="o-stat">V/Day <span>{{ o.vpd }}</span></div>
-                <div class="o-stat">Age <span>{{ o.days }}d</span></div>
-                <div class="o-stat">Like% <span>{{ o.lr }}%</span></div>
-              </div>
-            </div>
-          </div>
+  <!-- Stat bubbles (clicking opens modal) -->
+  <div class="bubbles" style="margin-top:18px">
+    <div class="bubble b-red"   onclick="bubbleModal('subs')"  title="Click for details">
+      <div class="b-lbl">Subscribers</div>
+      <div class="b-val" id="d-subs">—</div>
+      <div class="b-sub">across all channels</div>
+    </div>
+    <div class="bubble b-blue"  onclick="bubbleModal('views')" title="Click for details">
+      <div class="b-lbl">Total Views</div>
+      <div class="b-val" id="d-views">—</div>
+      <div class="b-sub">lifetime</div>
+    </div>
+    <div class="bubble b-gold"  onclick="bubbleModal('rev')"   title="Click for details">
+      <div class="b-lbl">Est. Revenue</div>
+      <div class="b-val" id="d-rev">—</div>
+      <div class="b-sub">~$3.50 RPM</div>
+    </div>
+    <div class="bubble b-green" onclick="bubbleModal('momentum')" title="Click for details">
+      <div class="b-lbl">Channels</div>
+      <div class="b-val" id="d-n">—</div>
+      <div class="b-sub">being tracked</div>
+    </div>
+  </div>
+
+  <!-- Outliers -->
+  <div style="padding:0 18px">
+    <div class="slabel">⚡ Outlier Tracker — Old Videos Spiking</div>
+    <div id="d-outliers"><div style="color:var(--muted);font-size:13px">Loading...</div></div>
+
+    <br>
+
+    <!-- Revenue table -->
+    <div class="slabel">Estimated Revenue by Channel</div>
+    <div class="tbl-wrap" style="margin-bottom:6px">
+      <table class="tbl" id="d-rev-table">
+        <thead><tr>
+          <th>Channel</th><th>Views (Period)</th>
+          <th>Low $1.5</th><th>Mid $3.5</th><th>High $5</th>
+        </tr></thead>
+        <tbody id="d-rev-tbody"><tr><td colspan="5" style="padding:14px;color:var(--muted);text-align:center">Loading...</td></tr></tbody>
+      </table>
+    </div>
+    <p style="font-size:10px;color:#2a2a2a;margin-bottom:18px">⚠️ Estimates only — actual revenue varies by niche and monetization.</p>
+
+    <!-- Top momentum -->
+    <div class="slabel">Top Videos by Momentum</div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th style="width:108px">Thumb</th><th>Title</th>
+          <th>Views</th><th class="hm">Likes</th>
+          <th>V/Day</th><th class="hm">Like%</th>
+        </tr></thead>
+        <tbody id="d-momentum"><tr><td colspan="6" style="padding:14px;color:var(--muted);text-align:center">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ALL CHANNELS ═══ -->
+<div class="tab-pane" id="pane-channels">
+  <div style="padding:18px">
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>Channel</th><th>Subscribers</th><th>Total Views</th>
+          <th class="hm">Videos</th><th>Est Revenue</th><th class="hm">Last Refreshed</th>
+        </tr></thead>
+        <tbody>
+          {% for ch_name, info in channels.items() %}
+          {% set tv = info.videos | sum(attribute='views') %}
+          <tr style="cursor:pointer" onclick="pickChannel('{{ ch_name | e }}');showTab('detail')">
+            <td style="padding:9px 11px;font-weight:600">{{ info.stats.get('channel_name',ch_name) }}</td>
+            <td class="vt-num">{{ '{:,}'.format(info.stats.get('subscribers',0)) }}</td>
+            <td class="vt-num">{{ '{:,}'.format(info.stats.get('total_views',0)) }}</td>
+            <td class="vt-num hm">{{ info.videos|length }}</td>
+            <td class="vt-num" style="color:var(--gold)">${{ (tv*3.5/1000)|int }}+</td>
+            <td class="vt-num hm" style="color:var(--muted)">{{ info.last_refreshed }}</td>
+          </tr>
           {% endfor %}
-        {% else %}
-          <div style="color:var(--muted);font-size:13px;padding:16px 0">
-            No outliers yet — refresh channels to detect videos spiking above their 30-day median.
-          </div>
-        {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
 
-        <br>
+<!-- ═══ CHANNEL DETAIL ═══ -->
+<div class="tab-pane" id="pane-detail">
+  <div style="padding:18px">
 
-        <!-- Revenue table -->
-        {% if rev_rows %}
-        <div class="slabel">Estimated Revenue by Channel</div>
-        <div class="vid-wrap" style="margin-bottom:6px">
-          <table class="rev-table">
-            <thead><tr>
-              <th>Channel</th>
-              <th>Total Views</th>
-              <th>Low ($1.5 RPM)</th>
-              <th>Mid ($3.5 RPM)</th>
-              <th>High ($5 RPM)</th>
-            </tr></thead>
-            <tbody>
-              {% for r in rev_rows %}
-              <tr>
-                <td>{{ r.name }}</td>
-                <td class="mono">{{ r.views }}</td>
-                <td class="mono">{{ r.low }}</td>
-                <td class="mono" style="color:var(--gold)">{{ r.mid }}</td>
-                <td class="mono">{{ r.high }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        <p style="font-size:10px;color:#333;margin-bottom:20px">⚠️ Estimates only — actual revenue varies by niche, audience, and monetization status.</p>
-        {% endif %}
+    <!-- Selector + refresh -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+      <select class="sel" id="ch-sel" style="flex:1;max-width:320px;font-size:13px;padding:8px 12px" onchange="loadChannel(this.value)">
+        {% for ch_name, info in channels.items() %}
+        <option value="{{ ch_name }}">{{ info.stats.get('channel_name',ch_name) }}</option>
+        {% endfor %}
+      </select>
+      <button class="save-btn" id="ch-refresh-btn" onclick="refreshCurrent()">↺ Refresh</button>
+      <span id="ch-status" style="font-size:11px;color:var(--muted)"></span>
+    </div>
 
-        <!-- Top momentum -->
-        <div class="slabel">Top Videos by Momentum</div>
-        {% if top_momentum %}
-        <div class="vid-wrap">
-          <table class="vid-table">
-            <thead><tr>
-              <th style="width:112px">Thumb</th>
-              <th>Title</th>
-              <th>Views</th>
-              <th class="hide-mobile">Likes</th>
-              <th>V/Day</th>
-              <th class="hide-mobile">Like%</th>
-            </tr></thead>
-            <tbody>
-              {% for v in top_momentum %}
-              <tr>
-                <td style="padding:7px 8px;width:112px">
-                  <a href="{{ v.url }}" target="_blank">
-                    {% if v.thumbnail %}<img class="vt-thumb" src="{{ v.thumbnail }}" loading="lazy" alt="">
-                    {% else %}<div class="vt-thumb-ph">▶</div>{% endif %}
-                  </a>
-                </td>
-                <td class="vt-body">
-                  <div class="vt-ch">{{ v.channel }}</div>
-                  <div class="vt-title">{{ v.title }}</div>
-                  <div class="vt-date">{{ v.published }} · {{ v.days_since_publish }}d ago</div>
-                  <a class="vt-link" href="{{ v.url }}" target="_blank">WATCH ↗</a>
-                </td>
-                <td class="vt-num">{{ '{:,}'.format(v.views) }}</td>
-                <td class="vt-num hide-mobile">{{ '{:,}'.format(v.likes) }}</td>
-                <td class="vt-num" style="color:var(--green)">{{ v.views_per_day }}</td>
-                <td class="vt-num hide-mobile">{{ v.like_rate }}%</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        {% else %}
-        <div style="color:var(--muted);font-size:13px;padding:12px 0">No video data — refresh channels.</div>
-        {% endif %}
+    <!-- Channel stat bubbles (clicking opens modal) -->
+    <div class="bubbles" id="ch-bubbles">
+      <div class="bubble b-grey"><div class="b-lbl">Select a channel</div><div class="b-val" style="font-size:16px;color:#333">—</div></div>
+    </div>
+
+    <!-- Sub-tabs -->
+    <div class="tab-bar" style="padding:0;margin-bottom:0">
+      <div class="tab on" onclick="showSub('videos')">Videos</div>
+      <div class="tab" onclick="showSub('charts')">Charts</div>
+      <div class="tab" onclick="showSub('timing')">Upload Timing</div>
+      <div class="tab" onclick="showSub('notes')">Notes</div>
+    </div>
+
+    <!-- Videos -->
+    <div class="tab-pane on" id="sub-videos" style="padding:14px 0 0">
+      <div class="sort-row">
+        <label>Sort by</label>
+        <select class="sel" id="sort-sel" onchange="sortVids(this.value)">
+          <option value="views">Views</option>
+          <option value="vpd">Views/Day</option>
+          <option value="lr">Like Rate</option>
+          <option value="pub">Published</option>
+        </select>
       </div>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <thead><tr>
+            <th style="width:108px">Thumb</th><th>Title</th>
+            <th>Views</th><th class="hm">Likes</th><th class="hm">Cmt</th>
+            <th>V/Day</th><th class="hm">Like%</th><th class="hm">Cmt%</th>
+          </tr></thead>
+          <tbody id="vid-tbody"><tr><td colspan="8" style="padding:16px;color:var(--muted);text-align:center">Select a channel</td></tr></tbody>
+        </table>
+      </div>
+      <div class="pag" id="pag">
+        <button class="pag-btn" id="pag-prev" onclick="chPage(-1)" disabled>⟨</button>
+        <span class="pag-info" id="pag-info"></span>
+        <button class="pag-btn" id="pag-next" onclick="chPage(1)"  disabled>⟩</button>
+      </div>
+    </div>
 
-      <!-- ═══ ALL CHANNELS TAB ═══ -->
-      <div class="tab-content" id="tab-channels">
-        <div class="vid-wrap">
-          <table class="rev-table">
-            <thead><tr>
-              <th>Channel</th>
-              <th>Subscribers</th>
-              <th>Total Views</th>
-              <th class="hide-mobile">Videos</th>
-              <th>Est Revenue</th>
-              <th class="hide-mobile">Last Refreshed</th>
-            </tr></thead>
-            <tbody>
-              {% for ch_name, info in channels.items() %}
-              {% set tv = info.videos | sum(attribute='views') %}
-              <tr style="cursor:pointer" onclick="selectChannel('{{ ch_name | e }}');showTab('detail')">
-                <td style="font-weight:600">{{ info.stats.get('channel_name', ch_name) }}</td>
-                <td class="mono">{{ '{:,}'.format(info.stats.get('subscribers',0)) }}</td>
-                <td class="mono">{{ '{:,}'.format(info.stats.get('total_views',0)) }}</td>
-                <td class="mono hide-mobile">{{ info.videos | length }}</td>
-                <td class="mono" style="color:var(--gold)">${{ (tv * 3.5 / 1000) | int | string }}+</td>
-                <td class="mono hide-mobile" style="color:var(--muted)">{{ info.last_refreshed }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+    <!-- Charts -->
+    <div class="tab-pane" id="sub-charts" style="padding:14px 0 0">
+      <div class="chart-box"><div class="chart-title">Top 10 by Total Views</div><canvas id="c-top-views" height="240"></canvas></div>
+      <div class="chart-box"><div class="chart-title">Top 10 by Momentum (V/Day)</div><canvas id="c-top-vpd" height="240"></canvas></div>
+      <div class="chart-box"><div class="chart-title">Views Per Video Over Time</div><canvas id="c-trend" height="200"></canvas></div>
+      <div class="chart-box"><div class="chart-title">Est. Revenue — Top 15 ($3.50 RPM)</div><canvas id="c-rev" height="240"></canvas></div>
+      <p style="font-size:10px;color:#2a2a2a;margin-bottom:14px">⚠️ Revenue estimates use $3.50 RPM. Actual revenue varies.</p>
+    </div>
+
+    <!-- Upload Timing -->
+    <div class="tab-pane" id="sub-timing" style="padding:14px 0 0">
+      <div class="best-day" id="best-day" style="display:none">
+        <div style="font-size:20px">📅</div>
+        <div>
+          <div class="bd-lbl">Best Day to Upload</div>
+          <div class="bd-val" id="bd-val">—</div>
+          <div class="bd-sub" id="bd-sub"></div>
         </div>
       </div>
+      <div class="chart-box"><div class="chart-title">Avg Views by Upload Day</div><canvas id="c-day" height="200"></canvas></div>
+      <div class="chart-box"><div class="chart-title">Videos Posted per Month</div><canvas id="c-mo-cnt" height="180"></canvas></div>
+      <div class="chart-box"><div class="chart-title">Avg Views per Month</div><canvas id="c-mo-avg" height="180"></canvas></div>
+    </div>
 
-      <!-- ═══ CHANNEL DETAIL TAB ═══ -->
-      <div class="tab-content" id="tab-detail">
+    <!-- Notes -->
+    <div class="tab-pane" id="sub-notes" style="padding:14px 0 0">
+      <div class="slabel">Team Notes</div>
+      <textarea class="notes-area" id="notes-area" placeholder="Observations, strategy, action items..."></textarea>
+      <button class="save-btn" onclick="saveNotes()">💾 Save Notes</button>
+    </div>
+  </div>
+</div>
 
-        <!-- Channel selector + refresh -->
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap">
-          <select id="ch-select" class="sort-sel" style="flex:1;max-width:320px;font-size:13px;padding:8px 12px" onchange="loadChannel(this.value)">
-            {% for ch_name, info in channels.items() %}
-            <option value="{{ ch_name }}">{{ info.stats.get('channel_name', ch_name) }}</option>
-            {% endfor %}
-          </select>
-          <button class="save-btn" id="ch-refresh-btn" onclick="refreshCurrent()" style="white-space:nowrap">↺ Refresh</button>
-          <span id="ch-refresh-status" style="font-size:11px;color:var(--muted)"></span>
-        </div>
-
-        <!-- Channel bubbles -->
-        <div class="bubbles" id="ch-bubbles">
-          <div class="bubble b-grey"><div class="b-label">Select a channel</div><div class="b-value" style="font-size:16px;color:#333">—</div></div>
-        </div>
-
-        <!-- Sub-tabs -->
-        <div class="tabs" style="margin-bottom:0" id="subtabs">
-          <div class="tab on" onclick="showSubtab('videos')">Videos</div>
-          <div class="tab" onclick="showSubtab('charts')">Charts</div>
-          <div class="tab" onclick="showSubtab('timing')">Upload Timing</div>
-          <div class="tab" onclick="showSubtab('notes')">Notes</div>
-        </div>
-
-        <!-- Videos subtab -->
-        <div class="tab-content on" id="sub-videos" style="padding-top:16px">
-          <div class="sort-row">
-            <label>Sort by</label>
-            <select class="sort-sel" onchange="sortVideos(this.value)" id="sort-sel">
-              <option value="views">Views</option>
-              <option value="vpd">Views/Day</option>
-              <option value="lr">Like Rate</option>
-              <option value="pub">Published</option>
-            </select>
-          </div>
-          <div class="vid-wrap" id="vid-table-wrap">
-            <table class="vid-table" id="vid-table">
-              <thead><tr>
-                <th style="width:112px">Thumb</th>
-                <th>Title</th>
-                <th>Views</th>
-                <th class="hide-mobile">Likes</th>
-                <th class="hide-mobile">Comments</th>
-                <th>V/Day</th>
-                <th class="hide-mobile">Like%</th>
-                <th class="hide-mobile">Cmt%</th>
-              </tr></thead>
-              <tbody id="vid-tbody"><tr><td colspan="8" style="padding:20px;color:var(--muted);text-align:center;font-size:13px">Select a channel to view videos</td></tr></tbody>
-            </table>
-          </div>
-          <div class="pag" id="pag">
-            <button class="pag-btn" id="pag-prev" onclick="changePage(-1)" disabled>⟨</button>
-            <span class="pag-info" id="pag-info"></span>
-            <button class="pag-btn" id="pag-next" onclick="changePage(1)" disabled>⟩</button>
-          </div>
-        </div>
-
-        <!-- Charts subtab -->
-        <div class="tab-content" id="sub-charts" style="padding-top:16px">
-          <div class="chart-box"><div class="chart-title">Top 10 by Total Views</div><div class="chart-wrap" style="height:260px"><canvas id="chart-top-views"></canvas></div></div>
-          <div class="chart-box"><div class="chart-title">Top 10 by Momentum (Views/Day)</div><div class="chart-wrap" style="height:260px"><canvas id="chart-top-vpd"></canvas></div></div>
-          <div class="chart-box"><div class="chart-title">Views Per Video Over Time</div><div class="chart-wrap" style="height:220px"><canvas id="chart-trend"></canvas></div></div>
-          <div class="chart-box"><div class="chart-title">Est. Revenue — Top 15 Videos ($3.50 RPM)</div><div class="chart-wrap" style="height:260px"><canvas id="chart-rev"></canvas></div></div>
-          <p style="font-size:10px;color:#333;margin-top:-8px;margin-bottom:14px">⚠️ Revenue estimates use $3.50 RPM midpoint. Actual revenue varies.</p>
-        </div>
-
-        <!-- Upload Timing subtab -->
-        <div class="tab-content" id="sub-timing" style="padding-top:16px">
-          <div class="best-day" id="best-day-box" style="display:none">
-            <div style="font-size:22px">📅</div>
-            <div>
-              <div class="bd-label">Best Day to Upload</div>
-              <div class="bd-value" id="best-day-val">—</div>
-              <div class="bd-sub" id="best-day-sub"></div>
-            </div>
-          </div>
-          <div class="chart-box"><div class="chart-title">Avg Views by Upload Day</div><div class="chart-wrap" style="height:220px"><canvas id="chart-day"></canvas></div></div>
-          <div class="chart-box"><div class="chart-title">Videos Posted per Month</div><div class="chart-wrap" style="height:200px"><canvas id="chart-monthly-count"></canvas></div></div>
-          <div class="chart-box"><div class="chart-title">Avg Views per Month</div><div class="chart-wrap" style="height:200px"><canvas id="chart-monthly-avg"></canvas></div></div>
-        </div>
-
-        <!-- Notes subtab -->
-        <div class="tab-content" id="sub-notes" style="padding-top:16px">
-          <div class="slabel">Team Notes</div>
-          <textarea class="notes-area" id="notes-area" placeholder="Observations, strategy, action items..."></textarea>
-          <button class="save-btn" onclick="saveNotes()">💾 Save Notes</button>
-        </div>
-      </div>
-
-    </div><!-- /content -->
-  </div><!-- /main -->
-</div><!-- /app -->
-
-<!-- TOAST -->
 <div class="toast" id="toast"></div>
 
 <script>
-// ── STATE ──────────────────────────────────────────────────
-let activeFolder = '';
-let timePreset   = 'All';
-let currentCh    = '';
-let allVideos    = [];
-let currentSort  = 'views';
-let page         = 0;
-const PER_PAGE   = 25;
-let charts       = {};
-let chData       = null;
+// ── GLOBALS ────────────────────────────────────────────────
+let TIME     = 'All';
+let FOLDER   = '';
+let CURRENT  = '';        // selected channel name
+let ALL_VIDS = [];        // full video list for current channel
+let CH_DATA  = null;      // full API response for current channel
+let DASH_DATA= null;      // cached dashboard data
+let VID_PAGE = 0;
+const PER    = 25;
+let CHARTS   = {};        // Chart.js instances keyed by canvas id
+let MODAL_CH = null;      // Chart.js instance for modal
 
 // ── DRAWER ─────────────────────────────────────────────────
 function toggleDrawer(){
@@ -632,280 +483,399 @@ function toggleDrawer(){
   const h=document.getElementById('ham');
   const o=d.classList.toggle('open');
   b.classList.toggle('open',o);
-  h.classList.toggle('active',o);
+  h.classList.toggle('open',o);
 }
 function closeDrawer(){
-  document.getElementById('drawer').classList.remove('open');
-  document.getElementById('backdrop').classList.remove('open');
-  document.getElementById('ham').classList.remove('active');
+  ['drawer','backdrop'].forEach(id=>document.getElementById(id).classList.remove('open'));
+  document.getElementById('ham').classList.remove('open');
 }
-document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeDrawer(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeModal(); closeDrawer(); }});
 
 // ── TABS ───────────────────────────────────────────────────
 function showTab(name){
-  document.querySelectorAll('.tab-content').forEach(el=>{
-    if(el.id===`tab-${name}`) el.classList.add('on');
-    else el.classList.remove('on');
+  document.querySelectorAll('.tab-bar .tab').forEach((t,i)=>{
+    t.classList.toggle('on',['dash','channels','detail'][i]===name);
   });
-  document.querySelectorAll('.tabs .tab').forEach((el,i)=>{
-    const names=['dashboard','channels','detail'];
-    el.classList.toggle('on', names[i]===name);
+  ['dash','channels','detail'].forEach(n=>{
+    document.getElementById(`pane-${n}`).classList.toggle('on',n===name);
   });
   document.getElementById('page-title').textContent =
-    name==='dashboard'?'Dashboard': name==='channels'?'All Channels':'Channel Detail';
+    name==='dash'?'Dashboard':name==='channels'?'All Channels':'Channel Detail';
+  // Auto-load when switching to detail
+  if(name==='detail' && CURRENT) loadChannel(CURRENT);
 }
-function showSubtab(name){
+function showSub(name){
   ['videos','charts','timing','notes'].forEach(n=>{
-    document.getElementById(`sub-${n}`).classList.toggle('on', n===name);
+    document.getElementById(`sub-${n}`).classList.toggle('on',n===name);
   });
-  document.querySelectorAll('#subtabs .tab').forEach((el,i)=>{
-    el.classList.toggle('on',i===['videos','charts','timing','notes'].indexOf(name));
+  document.querySelectorAll('#pane-detail .tab-bar .tab').forEach((t,i)=>{
+    t.classList.toggle('on',['videos','charts','timing','notes'][i]===name);
   });
 }
 
 // ── TIME FILTER ────────────────────────────────────────────
-function setTime(preset){
-  timePreset=preset;
-  document.querySelectorAll('.chip').forEach(c=>{
-    c.classList.toggle('on', c.dataset.preset===preset);
-  });
-  document.getElementById('time-badge').textContent = preset==='All'?'All Time':preset;
+function setTime(p){
+  TIME=p;
+  document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c.dataset.p===p));
+  document.getElementById('time-badge').textContent = p==='All'?'All Time':p;
+  loadDashboard();
+  if(CURRENT) loadChannel(CURRENT);
 }
-// init
-setTime('All');
 
 // ── FOLDER FILTER ──────────────────────────────────────────
-function setFolder(folder){
-  activeFolder=folder;
-  document.querySelectorAll('.folder-btn').forEach(b=>{
-    b.classList.toggle('on', b.dataset.folder===folder);
-  });
+function setFolder(f){
+  FOLDER=f;
+  document.querySelectorAll('.folder-btn').forEach(b=>b.classList.toggle('on',b.dataset.f===f));
 }
 
 // ── CHANNEL SELECT ─────────────────────────────────────────
-function selectChannel(name){
-  currentCh=name;
-  document.querySelectorAll('.ch-pill').forEach(p=>{
-    p.classList.toggle('selected', p.dataset.ch===name);
-  });
-  // sync the detail dropdown
-  const sel=document.getElementById('ch-select');
+function pickChannel(name){
+  CURRENT=name;
+  document.querySelectorAll('.ch-pill').forEach(p=>p.classList.toggle('on',p.dataset.ch===name));
+  const sel=document.getElementById('ch-sel');
   if(sel) sel.value=name;
-  loadChannel(name);
   showTab('detail');
   closeDrawer();
+  loadChannel(name);
 }
 
-function loadChannel(name){
-  currentCh=name;
-  document.getElementById('ch-refresh-status').textContent='Loading...';
-  const sort=document.getElementById('sort-sel')?.value || 'views';
-  fetch(`/api/channel/${encodeURIComponent(name)}?sort=${sort}`)
+// ── DASHBOARD ──────────────────────────────────────────────
+function loadDashboard(){
+  fetch(`/api/dashboard?time=${TIME}`)
     .then(r=>r.json())
-    .then(data=>{
-      chData=data;
-      document.getElementById('ch-refresh-status').textContent=`Refreshed: ${data.refreshed}`;
-      renderBubbles(data.stats);
-      allVideos=data.videos;
-      page=0;
-      renderVideos();
-      renderCharts(data.charts);
-      // notes
-      document.getElementById('notes-area').value=data.notes||'';
+    .then(d=>{
+      DASH_DATA=d;
+      document.getElementById('d-subs').textContent  = d.total_subs;
+      document.getElementById('d-views').textContent = d.total_views;
+      document.getElementById('d-rev').textContent   = d.total_rev;
+      document.getElementById('d-n').textContent     = d.n_channels;
+      renderOutliers(d.outliers);
+      renderRevTable(d.rev_rows);
+      renderMomentum(d.top_momentum);
     })
-    .catch(()=>{ document.getElementById('ch-refresh-status').textContent='Error loading'; });
+    .catch(()=>{});
 }
 
-// ── BUBBLES ────────────────────────────────────────────────
-function renderBubbles(s){
+function renderOutliers(list){
+  const el=document.getElementById('d-outliers');
+  if(!list.length){
+    el.innerHTML='<div style="color:var(--muted);font-size:13px;padding:4px 0">No outliers detected — refresh channels to find videos spiking 2× above their median.</div>';
+    return;
+  }
+  el.innerHTML=list.map(o=>`
+    <div class="o-card">
+      <a href="${o.url}" target="_blank">${o.thumbnail?`<img class="o-thumb" src="${o.thumbnail}" loading="lazy">`:`<div class="o-thumb-ph">▶</div>`}</a>
+      <div class="o-body">
+        <div class="o-badge">⚡ ${o.ratio}× above median</div>
+        <div class="o-title">${esc(o.title)}</div>
+        <div class="o-ch">${esc(o.ch_display)}</div>
+        <div class="o-stats">
+          <div class="o-stat">Views <span>${o.views}</span></div>
+          <div class="o-stat">V/Day <span>${o.vpd}</span></div>
+          <div class="o-stat">Age <span>${o.days}d</span></div>
+          <div class="o-stat">Like% <span>${o.lr}%</span></div>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+function renderRevTable(rows){
+  document.getElementById('d-rev-tbody').innerHTML = rows.length
+    ? rows.map(r=>`<tr>
+        <td style="padding:8px 11px;font-weight:600">${esc(r.name)}</td>
+        <td class="vt-num">${r.views}</td>
+        <td class="vt-num">${r.low}</td>
+        <td class="vt-num" style="color:var(--gold)">${r.mid}</td>
+        <td class="vt-num">${r.high}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" style="padding:14px;color:var(--muted);text-align:center">No data — refresh channels</td></tr>';
+}
+
+function renderMomentum(list){
+  document.getElementById('d-momentum').innerHTML = list.length
+    ? list.map(v=>{
+        const thumb=v.thumbnail?`<img class="vt-thumb" src="${v.thumbnail}" loading="lazy">`:`<div class="vt-thumb-ph">▶</div>`;
+        const badge=v.badge?`<span class="badge badge-${v.badge.toLowerCase()}">${v.badge}</span>`:'';
+        return `<tr>
+          <td style="padding:7px 8px;width:108px"><a href="${v.url}" target="_blank">${thumb}</a></td>
+          <td class="vt-body">
+            <div class="vt-ch">${esc(v.channel)}</div>
+            <div class="vt-title">${esc(v.title)}</div>
+            <div class="vt-date">${v.published} · ${v.days}d ago</div>
+            ${badge}<a class="vt-link" href="${v.url}" target="_blank">WATCH ↗</a>
+          </td>
+          <td class="vt-num">${v.views}</td>
+          <td class="vt-num hm">${v.likes}</td>
+          <td class="vt-num" style="color:var(--green)">${Number(v.vpd).toFixed(1)}</td>
+          <td class="vt-num hm">${Number(v.lr).toFixed(2)}%</td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="6" style="padding:14px;color:var(--muted);text-align:center">No data — refresh channels</td></tr>';
+}
+
+// ── CHANNEL DETAIL ─────────────────────────────────────────
+function loadChannel(name){
+  CURRENT=name;
+  document.getElementById('ch-status').textContent='Loading...';
+  const sort=document.getElementById('sort-sel')?.value||'views';
+  fetch(`/api/channel/${encodeURIComponent(name)}?time=${TIME}&sort=${sort}`)
+    .then(r=>r.json())
+    .then(d=>{
+      CH_DATA=d;
+      document.getElementById('ch-status').textContent=`Updated: ${d.refreshed}`;
+      renderChBubbles(d.stats, d.display);
+      ALL_VIDS=d.videos; VID_PAGE=0;
+      renderVids();
+      renderCharts(d.charts);
+      document.getElementById('notes-area').value=d.notes||'';
+    })
+    .catch(()=>{ document.getElementById('ch-status').textContent='Error'; });
+}
+
+// ── CHANNEL BUBBLES ───────────────────────────────────────
+function renderChBubbles(s, display){
   document.getElementById('ch-bubbles').innerHTML=`
-    <div class="bubble b-red"><div class="b-label">Subscribers</div><div class="b-value">${s.subscribers}</div><div class="b-sub">total</div></div>
-    <div class="bubble b-blue"><div class="b-label">Views</div><div class="b-value">${s.total_views}</div><div class="b-sub">lifetime</div></div>
-    <div class="bubble b-green"><div class="b-label">Avg Views</div><div class="b-value">${s.avg_views}</div><div class="b-sub">per video</div></div>
-    <div class="bubble b-gold"><div class="b-label">Est Revenue</div><div class="b-value" style="font-size:15px">${s.rev_range}</div><div class="b-sub">$1.5–$5 RPM</div></div>
-    <div class="bubble b-grey"><div class="b-label">Like Rate</div><div class="b-value" style="font-size:18px">${s.avg_lr}</div><div class="b-sub">avg</div></div>
-    <div class="bubble b-grey"><div class="b-label">Videos</div><div class="b-value">${s.n_videos}</div><div class="b-sub">analyzed</div></div>
+    <div class="bubble b-red"   onclick="chBubbleModal('subs',   '${display}')" title="Click for chart"><div class="b-lbl">Subscribers</div><div class="b-val">${s.subscribers}</div><div class="b-sub">total</div></div>
+    <div class="bubble b-blue"  onclick="chBubbleModal('views',  '${display}')" title="Click for chart"><div class="b-lbl">Views</div><div class="b-val">${s.total_views}</div><div class="b-sub">lifetime</div></div>
+    <div class="bubble b-green" onclick="chBubbleModal('avg',    '${display}')" title="Click for chart"><div class="b-lbl">Avg Views</div><div class="b-val">${s.avg_views}</div><div class="b-sub">per video</div></div>
+    <div class="bubble b-gold"  onclick="chBubbleModal('rev',    '${display}')" title="Click for chart"><div class="b-lbl">Est Revenue</div><div class="b-val" style="font-size:15px">${s.rev_range}</div><div class="b-sub">$1.5–$5 RPM</div></div>
+    <div class="bubble b-grey"  onclick="chBubbleModal('engage', '${display}')" title="Click for chart"><div class="b-lbl">Like Rate</div><div class="b-val" style="font-size:18px">${s.avg_lr}</div><div class="b-sub">avg · cmt ${s.avg_cr}</div></div>
+    <div class="bubble b-grey"  onclick="chBubbleModal('cadence','${display}')" title="Click for chart"><div class="b-lbl">Videos</div><div class="b-val">${s.n_videos}</div><div class="b-sub">in period</div></div>
   `;
 }
 
 // ── VIDEO TABLE ────────────────────────────────────────────
-function sortVideos(sort){
-  currentSort=sort;
-  page=0;
-  if(currentCh) loadChannel(currentCh);
+function sortVids(sort){ if(CURRENT){ VID_PAGE=0; loadChannel(CURRENT); } }
+
+function renderVids(){
+  const slice=ALL_VIDS.slice(VID_PAGE*PER,(VID_PAGE+1)*PER);
+  document.getElementById('vid-tbody').innerHTML = slice.length
+    ? slice.map(v=>{
+        const thumb=v.thumbnail?`<img class="vt-thumb" src="${v.thumbnail}" loading="lazy">`:`<div class="vt-thumb-ph">▶</div>`;
+        const badge=v.badge?`<span class="badge badge-${v.badge.toLowerCase()}">${v.badge}</span>`:'';
+        return `<tr>
+          <td style="padding:7px 8px;width:108px"><a href="${v.url}" target="_blank">${thumb}</a></td>
+          <td class="vt-body">
+            <div class="vt-title">${esc(v.title)}</div>
+            <div class="vt-date">${v.published} · ${v.days}d ago</div>
+            ${badge}<a class="vt-link" href="${v.url}" target="_blank">WATCH ↗</a>
+          </td>
+          <td class="vt-num">${v.views}</td>
+          <td class="vt-num hm">${v.likes}</td>
+          <td class="vt-num hm">${v.comments}</td>
+          <td class="vt-num" style="color:var(--green)">${v.vpd}</td>
+          <td class="vt-num hm">${v.lr}</td>
+          <td class="vt-num hm">${v.cr}</td>
+        </tr>`;
+      }).join('')
+    : '<tr><td colspan="8" style="padding:16px;color:var(--muted);text-align:center">No videos in this time period</td></tr>';
+
+  const tp=Math.ceil(ALL_VIDS.length/PER)||1;
+  document.getElementById('pag-info').textContent=`Page ${VID_PAGE+1}/${tp} — ${ALL_VIDS.length} videos`;
+  document.getElementById('pag-prev').disabled=VID_PAGE===0;
+  document.getElementById('pag-next').disabled=VID_PAGE>=tp-1;
 }
+function chPage(d){ VID_PAGE+=d; renderVids(); }
 
-function renderVideos(){
-  const start=page*PER_PAGE;
-  const slice=allVideos.slice(start, start+PER_PAGE);
-  const tbody=document.getElementById('vid-tbody');
-  if(!slice.length){
-    tbody.innerHTML='<tr><td colspan="8" style="padding:20px;color:var(--muted);text-align:center;font-size:13px">No videos</td></tr>';
-    return;
-  }
-  tbody.innerHTML=slice.map(v=>{
-    const thumb=v.thumbnail
-      ? `<img class="vt-thumb" src="${v.thumbnail}" loading="lazy" alt="">`
-      : `<div class="vt-thumb-ph">▶</div>`;
-    const badge=v.badge
-      ? `<span class="badge badge-${v.badge.toLowerCase()}">${v.badge}</span>`:'';
-    return `<tr>
-      <td style="padding:7px 8px;width:112px"><a href="${v.url}" target="_blank">${thumb}</a></td>
-      <td class="vt-body">
-        <div class="vt-title">${esc(v.title)}</div>
-        <div class="vt-date">${v.published} · ${v.days}d ago</div>
-        ${badge}<a class="vt-link" href="${v.url}" target="_blank">WATCH ↗</a>
-      </td>
-      <td class="vt-num">${v.views}</td>
-      <td class="vt-num hide-mobile">${v.likes}</td>
-      <td class="vt-num hide-mobile">${v.comments}</td>
-      <td class="vt-num" style="color:var(--green)">${v.vpd}</td>
-      <td class="vt-num hide-mobile">${v.lr}</td>
-      <td class="vt-num hide-mobile">${v.cr}</td>
-    </tr>`;
-  }).join('');
-
-  // Pagination
-  const total=allVideos.length;
-  const totalPages=Math.ceil(total/PER_PAGE);
-  document.getElementById('pag-info').textContent=`Page ${page+1} / ${totalPages} — ${total} videos`;
-  document.getElementById('pag-prev').disabled=page===0;
-  document.getElementById('pag-next').disabled=page>=totalPages-1;
-}
-
-function changePage(dir){
-  page+=dir;
-  renderVideos();
-  document.getElementById('vid-table-wrap').scrollTop=0;
-}
-
-// ── CHARTS ────────────────────────────────────────────────
-const CHART_DEFAULTS={
-  color:'#555',
+// ── CHARTS ─────────────────────────────────────────────────
+const CD={
+  responsive:true,maintainAspectRatio:false,
   plugins:{legend:{display:false},tooltip:{backgroundColor:'#111',titleColor:'#e8e8e8',bodyColor:'#888',borderColor:'#222',borderWidth:1}},
-  scales:{
-    x:{grid:{color:'#0d0d0d'},ticks:{color:'#444',font:{family:'JetBrains Mono',size:9}}},
-    y:{grid:{color:'#0d0d0d'},ticks:{color:'#444',font:{family:'JetBrains Mono',size:9}}},
-  },
+  scales:{x:{grid:{color:'#0d0d0d'},ticks:{color:'#444',font:{family:'JetBrains Mono',size:9}}},
+          y:{grid:{color:'#0d0d0d'},ticks:{color:'#444',font:{family:'JetBrains Mono',size:9}}}},
 };
 
-function mkChart(id, type, labels, data, color, opts={}){
-  if(charts[id]) charts[id].destroy();
-  const ctx=document.getElementById(id);
-  if(!ctx) return;
-  charts[id]=new Chart(ctx,{
-    type, data:{
-      labels,
-      datasets:[{
-        data, backgroundColor: color+'33', borderColor: color,
-        borderWidth:2, fill:type==='line', tension:.35,
-        pointRadius:type==='line'?3:0, pointBackgroundColor:color,
-        barThickness: type==='bar'?undefined:undefined,
-      }]
-    },
-    options:{...CHART_DEFAULTS, ...opts, maintainAspectRatio:false, responsive:true,
-      plugins:{...CHART_DEFAULTS.plugins,...(opts.plugins||{})}}
-  });
+function mk(id,type,labels,data,color,extra={}){
+  if(CHARTS[id]) CHARTS[id].destroy();
+  const ctx=document.getElementById(id); if(!ctx) return;
+  CHARTS[id]=new Chart(ctx,{type,data:{labels,datasets:[{data,
+    backgroundColor:color+'28',borderColor:color,borderWidth:2,
+    fill:type==='line',tension:.35,pointRadius:type==='line'?3:0,
+    pointBackgroundColor:color,...extra}]},
+    options:{...CD,...(extra._opts||{})}});
 }
 
 function renderCharts(c){
-  mkChart('chart-top-views','bar',c.top10_views_labels,c.top10_views_data,'#ff2244',{indexAxis:'y'});
-  mkChart('chart-top-vpd','bar',c.top10_vpd_labels,c.top10_vpd_data,'#00aaff',{indexAxis:'y'});
-  mkChart('chart-trend','line',c.trend_labels,c.views_trend,'#ff2244');
-  mkChart('chart-rev','bar',c.rev_labels,c.rev_data,'#ffaa00',{indexAxis:'y'});
+  if(!c) return;
+  mk('c-top-views','bar',c.top10_views_labels,c.top10_views_data,'#ff2244',{indexAxis:'y',_opts:{indexAxis:'y'}});
+  mk('c-top-vpd',  'bar',c.top10_vpd_labels,  c.top10_vpd_data,  '#00aaff',{indexAxis:'y',_opts:{indexAxis:'y'}});
+  mk('c-trend',    'line',c.trend_labels,      c.views_trend,     '#ff2244');
+  mk('c-rev',      'bar', c.rev_labels,        c.rev_data,        '#ffaa00',{indexAxis:'y',_opts:{indexAxis:'y'}});
   // timing
-  if(c.best_day){
-    const box=document.getElementById('best-day-box');
-    box.style.display='flex';
-    document.getElementById('best-day-val').textContent=c.best_day;
-    const avg=c.day_data[c.day_labels.indexOf(c.best_day)];
-    document.getElementById('best-day-sub').textContent=avg?`Avg ${Number(avg).toLocaleString()} views`:'';
+  if(c.best_day && c.best_day!=='—'){
+    const bd=document.getElementById('best-day'); bd.style.display='flex';
+    document.getElementById('bd-val').textContent=c.best_day;
+    document.getElementById('bd-sub').textContent=c.best_day_avg?`Avg ${Number(c.best_day_avg).toLocaleString()} views`:'';
   }
-  mkChart('chart-day','bar',c.day_labels,c.day_data,'#ff2244');
-  mkChart('chart-monthly-count','bar',c.monthly_labels,c.monthly_counts,'#1e1e1e',{datasets:[{data:c.monthly_counts,backgroundColor:'#1e1e1e',borderColor:'#2a2a2a',borderWidth:1}]});
-  mkChart('chart-monthly-avg','line',c.monthly_labels,c.monthly_views,'#ff2244');
+  mk('c-day',    'bar', c.day_labels,      c.day_data,      '#ff2244');
+  mk('c-mo-cnt', 'bar', c.monthly_labels,  c.monthly_counts,'#1e1e1e');
+  mk('c-mo-avg', 'line',c.monthly_labels,  c.monthly_views, '#ff2244');
+}
+
+// ── MODAL ──────────────────────────────────────────────────
+function openModal(title, statsHtml, chartFn){
+  document.getElementById('modal-title').textContent=title;
+  document.getElementById('modal-stats').innerHTML=statsHtml;
+  document.getElementById('modal-bg').classList.add('open');
+  // Destroy old modal chart then build new one
+  if(MODAL_CH){ MODAL_CH.destroy(); MODAL_CH=null; }
+  setTimeout(()=>{ MODAL_CH=chartFn(document.getElementById('modal-chart')); },50);
+}
+function closeModal(e){
+  if(e && e.target!==document.getElementById('modal-bg')) return;
+  document.getElementById('modal-bg').classList.remove('open');
+  if(MODAL_CH){ MODAL_CH.destroy(); MODAL_CH=null; }
+}
+
+function mStat(lbl,val){ return `<div class="modal-stat"><div class="modal-stat-lbl">${lbl}</div><div class="modal-stat-val">${val}</div></div>`; }
+
+// Dashboard bubble modals — show channel comparison charts
+function bubbleModal(type){
+  if(!DASH_DATA) return;
+  const d=DASH_DATA;
+  if(type==='subs'){
+    openModal('Subscribers by Channel',
+      mStat('Total',d.total_subs)+mStat('Channels',d.n_channels),
+      ctx=>new Chart(ctx,{type:'bar',data:{
+        labels:{{ channels.keys()|list|tojson }},
+        datasets:[{data:{{ channels.values()|map(attribute='stats')|map(attribute='subscribers',default=0)|list|tojson }},
+          backgroundColor:'#ff224428',borderColor:'#ff2244',borderWidth:2}]},
+        options:{...CD,responsive:true,maintainAspectRatio:false}}));
+  } else if(type==='views'){
+    openModal('Total Views by Channel',
+      mStat('Combined',d.total_views)+mStat('Channels',d.n_channels),
+      ctx=>new Chart(ctx,{type:'bar',data:{
+        labels:{{ channels.keys()|list|tojson }},
+        datasets:[{data:{{ channels.values()|map(attribute='stats')|map(attribute='total_views',default=0)|list|tojson }},
+          backgroundColor:'#00aaff28',borderColor:'#00aaff',borderWidth:2}]},
+        options:{...CD,responsive:true,maintainAspectRatio:false}}));
+  } else if(type==='rev'){
+    openModal('Est. Revenue by Channel',
+      mStat('Total (Mid)',d.total_rev)+mStat('RPM','$3.50'),
+      ctx=>new Chart(ctx,{type:'bar',data:{
+        labels:(d.rev_rows||[]).map(r=>r.name),
+        datasets:[{data:(d.rev_rows||[]).map(r=>parseFloat(r.mid.replace(/[$KM,]/g,''))*(r.mid.includes('K')?1000:r.mid.includes('M')?1000000:1)),
+          backgroundColor:'#ffaa0028',borderColor:'#ffaa00',borderWidth:2}]},
+        options:{...CD,responsive:true,maintainAspectRatio:false}}));
+  } else if(type==='momentum'){
+    openModal('Top Videos by Momentum',
+      mStat('Top V/Day', (d.top_momentum[0]||{vpd:0}).vpd ? Number((d.top_momentum[0]||{vpd:0}).vpd).toFixed(1) : '—'),
+      ctx=>new Chart(ctx,{type:'bar',data:{
+        labels:(d.top_momentum||[]).slice(0,10).map(v=>v.title.substring(0,30)),
+        datasets:[{data:(d.top_momentum||[]).slice(0,10).map(v=>v.vpd),
+          backgroundColor:'#00ff8828',borderColor:'#00ff88',borderWidth:2,indexAxis:'y'}]},
+        options:{...CD,indexAxis:'y',responsive:true,maintainAspectRatio:false}}));
+  }
+}
+
+// Channel detail bubble modals
+function chBubbleModal(type, display){
+  if(!CH_DATA) return;
+  const s=CH_DATA.stats; const c=CH_DATA.charts;
+  if(type==='subs'){
+    openModal(`${display} — Subscribers`,
+      mStat('Subscribers',s.subscribers)+mStat('Total Views',s.total_views),
+      ctx=>new Chart(ctx,{type:'bar',data:{
+        labels:c.top10_views_labels,
+        datasets:[{data:c.top10_views_data,backgroundColor:'#ff224428',borderColor:'#ff2244',borderWidth:2,indexAxis:'y'}]},
+        options:{...CD,indexAxis:'y',responsive:true,maintainAspectRatio:false}}));
+  } else if(type==='views'){
+    openModal(`${display} — Views Over Time`,
+      mStat('Total Views',s.total_views)+mStat('Videos',s.n_videos),
+      ctx=>new Chart(ctx,{type:'line',data:{
+        labels:c.trend_labels,
+        datasets:[{data:c.views_trend,backgroundColor:'#00aaff18',borderColor:'#00aaff',borderWidth:2,fill:true,tension:.35,pointRadius:2}]},
+        options:{...CD,responsive:true,maintainAspectRatio:false}}));
+  } else if(type==='avg'){
+    openModal(`${display} — Views Distribution`,
+      mStat('Avg Views',s.avg_views)+mStat('Videos',s.n_videos),
+      ctx=>new Chart(ctx,{type:'bar',data:{
+        labels:c.hist_labels,
+        datasets:[{data:c.hist_data,backgroundColor:'#00ff8828',borderColor:'#00ff88',borderWidth:2}]},
+        options:{...CD,responsive:true,maintainAspectRatio:false}}));
+  } else if(type==='rev'){
+    openModal(`${display} — Est. Revenue by Video`,
+      mStat('Range',s.rev_range)+mStat('RPM','$1.5–$5'),
+      ctx=>new Chart(ctx,{type:'bar',data:{
+        labels:c.rev_labels,
+        datasets:[{data:c.rev_data,backgroundColor:'#ffaa0028',borderColor:'#ffaa00',borderWidth:2,indexAxis:'y'}]},
+        options:{...CD,indexAxis:'y',responsive:true,maintainAspectRatio:false}}));
+  } else if(type==='engage'){
+    openModal(`${display} — Engagement`,
+      mStat('Like Rate',s.avg_lr)+mStat('Comment Rate',s.avg_cr),
+      ctx=>new Chart(ctx,{type:'line',data:{
+        labels:c.trend_labels,
+        datasets:[
+          {label:'Like Rate %',data:CH_DATA.videos.map(v=>parseFloat(v.lr)),borderColor:'#ff2244',backgroundColor:'#ff224418',fill:false,tension:.35,pointRadius:2,borderWidth:2},
+        ]},
+        options:{...CD,responsive:true,maintainAspectRatio:false,plugins:{...CD.plugins,legend:{display:true,labels:{color:'#888'}}}}}));
+  } else if(type==='cadence'){
+    openModal(`${display} — Upload Cadence`,
+      mStat('Videos',s.n_videos)+mStat('Best Day',c.best_day||'—'),
+      ctx=>new Chart(ctx,{type:'bar',data:{
+        labels:c.monthly_labels,
+        datasets:[{data:c.monthly_counts,backgroundColor:'#ffffff10',borderColor:'#2a2a2a',borderWidth:2}]},
+        options:{...CD,responsive:true,maintainAspectRatio:false}}));
+  }
 }
 
 // ── REFRESH ────────────────────────────────────────────────
 function refreshAll(){
   const btn=document.getElementById('refresh-btn');
-  btn.classList.add('loading');
-  btn.innerHTML='<span class="spin"></span> Refreshing...';
-  fetch('/api/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})})
+  btn.classList.add('loading'); btn.innerHTML='<span class="spin"></span> Refreshing...';
+  fetch('/api/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}' })
     .then(r=>r.json())
-    .then(data=>{
-      const ok=data.results.filter(r=>r.status==='ok').length;
-      const err=data.results.filter(r=>r.status==='error').length;
-      toast(err?`Refreshed ${ok}, ${err} errors`:`All ${ok} channels refreshed`,'ok');
+    .then(d=>{
+      const ok=d.results.filter(r=>r.status==='ok').length;
+      const err=d.results.filter(r=>r.status==='error').length;
+      toast(err?`${ok} refreshed, ${err} errors`:`All ${ok} channels refreshed`,'ok');
       setTimeout(()=>location.reload(),800);
     })
     .catch(()=>{ toast('Refresh failed','err'); btn.classList.remove('loading'); btn.innerHTML='↺ Refresh All Channels'; });
 }
 
 function refreshCurrent(){
-  if(!currentCh) return;
+  if(!CURRENT) return;
   const btn=document.getElementById('ch-refresh-btn');
   btn.disabled=true; btn.textContent='Refreshing...';
-  fetch('/api/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channel_name:currentCh})})
+  fetch('/api/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channel_name:CURRENT})})
     .then(r=>r.json())
-    .then(data=>{
-      toast('Channel refreshed','ok');
-      btn.disabled=false; btn.textContent='↺ Refresh';
-      loadChannel(currentCh);
-    })
-    .catch(()=>{ toast('Refresh failed','err'); btn.disabled=false; btn.textContent='↺ Refresh'; });
+    .then(()=>{ toast('Refreshed','ok'); btn.disabled=false; btn.textContent='↺ Refresh'; loadDashboard(); loadChannel(CURRENT); })
+    .catch(()=>{ toast('Failed','err'); btn.disabled=false; btn.textContent='↺ Refresh'; });
 }
 
-// ── ADD / DELETE CHANNEL ───────────────────────────────────
-function toggleAdd(){
-  const f=document.getElementById('add-form');
-  f.classList.toggle('open');
-  if(f.classList.contains('open')) document.getElementById('add-ch-input').focus();
-}
-
+// ── ADD / DELETE ───────────────────────────────────────────
+function toggleAdd(){ const f=document.getElementById('add-form'); f.classList.toggle('open'); if(f.classList.contains('open')) document.getElementById('add-input').focus(); }
 function addChannel(){
-  const cid=document.getElementById('add-ch-input').value.trim();
-  if(!cid) return;
-  fetch('/api/channel/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channel_id:cid,folder:activeFolder})})
-    .then(r=>r.json())
-    .then(d=>{
-      if(d.error){ toast(d.error,'err'); return; }
-      toast(`Added: ${d.name}`,'ok');
-      setTimeout(()=>location.reload(),600);
-    })
-    .catch(()=>toast('Failed to add channel','err'));
+  const cid=document.getElementById('add-input').value.trim(); if(!cid) return;
+  fetch('/api/channel/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channel_id:cid,folder:FOLDER})})
+    .then(r=>r.json()).then(d=>{ if(d.error){toast(d.error,'err');return;} toast(`Added: ${d.name}`,'ok'); setTimeout(()=>location.reload(),600); })
+    .catch(()=>toast('Failed to add','err'));
 }
-document.getElementById('add-ch-input').addEventListener('keydown',e=>{ if(e.key==='Enter') addChannel(); });
-
-function deleteChannel(name){
-  if(!confirm(`Remove "${name}"?`)) return;
+document.getElementById('add-input').addEventListener('keydown',e=>{ if(e.key==='Enter') addChannel(); });
+function delChannel(name){ if(!confirm(`Remove "${name}"?`)) return;
   fetch('/api/channel/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})})
-    .then(()=>{ toast('Channel removed','ok'); setTimeout(()=>location.reload(),500); })
-    .catch(()=>toast('Failed','err'));
-}
+    .then(()=>{ toast('Removed','ok'); setTimeout(()=>location.reload(),500); }).catch(()=>toast('Failed','err')); }
 
 // ── NOTES ─────────────────────────────────────────────────
 function saveNotes(){
-  const notes=document.getElementById('notes-area').value;
-  fetch('/api/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channel_name:currentCh,notes})})
-    .then(()=>toast('Notes saved','ok'))
-    .catch(()=>toast('Failed to save','err'));
+  fetch('/api/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channel_name:CURRENT,notes:document.getElementById('notes-area').value})})
+    .then(()=>toast('Notes saved','ok')).catch(()=>toast('Failed','err'));
 }
 
 // ── TOAST ──────────────────────────────────────────────────
-function toast(msg, type='ok'){
-  const t=document.getElementById('toast');
-  t.textContent=msg; t.className=`toast ${type} show`;
-  setTimeout(()=>t.classList.remove('show'),2800);
-}
+function toast(msg,type='ok'){ const t=document.getElementById('toast'); t.textContent=msg; t.className=`toast ${type} show`; setTimeout(()=>t.classList.remove('show'),2800); }
 
-// ── UTILS ──────────────────────────────────────────────────
+// ── UTIL ───────────────────────────────────────────────────
 function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
 // ── INIT ───────────────────────────────────────────────────
-// Load first channel on detail tab if available
-const firstCh = document.getElementById('ch-select')?.options[0]?.value;
-if(firstCh){ currentCh=firstCh; }
+setTime('All');           // set default chip active
+loadDashboard();          // load dashboard on page open
+
+// Auto-load first channel in detail view
+const firstCh = document.getElementById('ch-sel')?.options[0]?.value;
+if(firstCh){ CURRENT=firstCh; loadChannel(firstCh); }
 </script>
 </body>
 </html>
