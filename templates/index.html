@@ -287,11 +287,17 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--font);min-hei
   <span class="top-badge" id="time-badge">All Time</span>
 </div>
 
+<!-- QUOTA ERROR BANNER -->
+<div id="quota-banner" style="display:none;background:rgba(255,170,0,.1);border-bottom:1px solid rgba(255,170,0,.3);padding:9px 18px;font-size:12px;color:#ffaa00;font-family:var(--mono)">
+  ⚠️ YouTube API quota exceeded — data shown is from cache. Resets daily at midnight PT.
+</div>
+
 <!-- MAIN TABS -->
 <div class="tab-bar">
   <div class="tab on"  onclick="showTab('dash')">Dashboard</div>
   <div class="tab"     onclick="showTab('channels')">All Channels</div>
   <div class="tab"     onclick="showTab('detail')">Channel Detail</div>
+  <div class="tab"     onclick="showTab('allvids')">All Videos</div>
 </div>
 
 <!-- ═══ DASHBOARD ═══ -->
@@ -299,22 +305,27 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--font);min-hei
 
   <!-- Stat bubbles (clicking opens modal) -->
   <div class="bubbles" style="margin-top:18px">
+    <div class="bubble b-red"   onclick="bubbleModal('subs')"  title="Click for channel breakdown">
+      <div class="b-lbl">Total Subscribers</div>
+      <div class="b-val" id="d-subs">—</div>
+      <div class="b-sub">lifetime · all channels</div>
+    </div>
+    <div class="bubble b-green" onclick="bubbleModal('subgains')" title="Click for details">
+      <div class="b-lbl">Subs Gained <span id="d-subgains-period" style="color:var(--muted)">(All Time)</span></div>
+      <div class="b-val" id="d-subgains">—</div>
+      <div class="b-sub">in selected period</div>
+    </div>
     <div class="bubble b-blue"  onclick="bubbleModal('views')" title="Click for details">
       <div class="b-lbl">Views <span id="d-period-lbl" style="color:var(--muted)">(All Time)</span></div>
       <div class="b-val" id="d-views">—</div>
-      <div class="b-sub" id="d-subs-sub">Total subs: —</div>
+      <div class="b-sub" id="d-subs-sub">period total</div>
     </div>
     <div class="bubble b-gold"  onclick="bubbleModal('rev')"   title="Click for details">
       <div class="b-lbl">Est. Revenue</div>
       <div class="b-val" id="d-rev">—</div>
       <div class="b-sub">~$3.50 RPM</div>
     </div>
-    <div class="bubble b-red"   onclick="bubbleModal('subs')"  title="Click for channel breakdown">
-      <div class="b-lbl">Total Subscribers</div>
-      <div class="b-val" id="d-subs">—</div>
-      <div class="b-sub">lifetime · all channels</div>
-    </div>
-    <div class="bubble b-green" onclick="bubbleModal('momentum')" title="Click for details">
+    <div class="bubble b-grey" onclick="bubbleModal('momentum')" title="Click for details">
       <div class="b-lbl">Channels</div>
       <div class="b-val" id="d-n">—</div>
       <div class="b-sub">being tracked</div>
@@ -409,6 +420,7 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--font);min-hei
           <option value="vpd">Views/Day</option>
           <option value="lr">Like Rate</option>
         </select>
+        <input class="add-input" id="vid-search" placeholder="Filter videos..." style="flex:1;max-width:260px;margin:0" oninput="filterVids()" />
       </div>
       <div class="tbl-wrap">
         <table class="tbl">
@@ -460,6 +472,35 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--font);min-hei
   </div>
 </div>
 
+<!-- ═══ ALL VIDEOS ═══ -->
+<div class="tab-pane" id="pane-allvids">
+  <div style="padding:18px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <input class="add-input" id="av-search" placeholder="Search all videos..." style="flex:1;max-width:340px" oninput="avSearch()" />
+      <select class="sel" id="av-sort" onchange="loadAllVideos(1)">
+        <option value="pub">Published (Newest)</option>
+        <option value="views">Views</option>
+        <option value="vpd">Views / Day</option>
+      </select>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th style="width:108px">Thumb</th><th>Title</th>
+          <th>Views</th><th class="hm">Likes</th><th class="hm">Cmt</th>
+          <th>V/Day</th><th class="hm">Like%</th>
+        </tr></thead>
+        <tbody id="av-tbody"><tr><td colspan="7" style="padding:16px;color:var(--muted);text-align:center">Click "All Videos" tab to load</td></tr></tbody>
+      </table>
+    </div>
+    <div class="pag" id="av-pag">
+      <button class="pag-btn" id="av-prev" onclick="avPage(-1)" disabled>⟨</button>
+      <span class="pag-info" id="av-info"></span>
+      <button class="pag-btn" id="av-next" onclick="avPage(1)" disabled>⟩</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -492,16 +533,17 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ closeModal(); clo
 
 // ── TABS ───────────────────────────────────────────────────
 function showTab(name){
-  document.querySelectorAll('.tab-bar .tab').forEach((t,i)=>{
-    t.classList.toggle('on',['dash','channels','detail'][i]===name);
+  const tabs=['dash','channels','detail','allvids'];
+  document.querySelectorAll('.tab-bar > .tab').forEach((t,i)=>{
+    t.classList.toggle('on',tabs[i]===name);
   });
-  ['dash','channels','detail'].forEach(n=>{
+  tabs.forEach(n=>{
     document.getElementById(`pane-${n}`).classList.toggle('on',n===name);
   });
-  document.getElementById('page-title').textContent =
-    name==='dash'?'Dashboard':name==='channels'?'All Channels':'Channel Detail';
-  // Auto-load when switching to detail
+  const titles={dash:'Dashboard',channels:'All Channels',detail:'Channel Detail',allvids:'All Videos'};
+  document.getElementById('page-title').textContent = titles[name]||name;
   if(name==='detail' && CURRENT) loadChannel(CURRENT);
+  if(name==='allvids') loadAllVideos(1);
 }
 function showSub(name){
   ['videos','charts','timing','notes'].forEach(n=>{
@@ -515,6 +557,7 @@ function showSub(name){
 // ── TIME FILTER ────────────────────────────────────────────
 function setTime(p){
   TIME=p;
+  localStorage.setItem('yt_time',p);
   document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c.dataset.p===p));
   document.getElementById('time-badge').textContent = p==='All'?'All Time':p;
   loadDashboard();
@@ -525,6 +568,8 @@ function setTime(p){
 function setFolder(f){
   FOLDER=f;
   document.querySelectorAll('.folder-btn').forEach(b=>b.classList.toggle('on',b.dataset.f===f));
+  loadDashboard();
+  if(CURRENT) loadChannel(CURRENT);
 }
 
 // ── CHANNEL SELECT ─────────────────────────────────────────
@@ -540,16 +585,20 @@ function pickChannel(name){
 
 // ── DASHBOARD ──────────────────────────────────────────────
 function loadDashboard(){
-  fetch(`/api/dashboard?time=${TIME}`)
+  const url=`/api/dashboard?time=${TIME}&folder=${encodeURIComponent(FOLDER)}`;
+  fetch(url)
     .then(r=>r.json())
     .then(d=>{
       DASH_DATA=d;
-      document.getElementById('d-subs').textContent     = d.total_subs;
-      document.getElementById('d-views').textContent    = d.period_views || d.total_views;
-      document.getElementById('d-subs-sub').textContent = `Total subs: ${d.total_subs}`;
-      document.getElementById('d-period-lbl').textContent = TIME==='All' ? '(All Time)' : `(${TIME})`;
-      document.getElementById('d-rev').textContent      = d.total_rev;
-      document.getElementById('d-n').textContent        = d.n_channels;
+      if(d.quota_exceeded) showQuotaBanner();
+      const periodLbl = TIME==='All'?'(All Time)':`(${TIME})`;
+      document.getElementById('d-subs').textContent       = d.total_subs;
+      document.getElementById('d-subgains').textContent   = d.sub_gains||'—';
+      document.getElementById('d-subgains-period').textContent = periodLbl;
+      document.getElementById('d-views').textContent      = d.period_views || d.total_views;
+      document.getElementById('d-period-lbl').textContent = periodLbl;
+      document.getElementById('d-rev').textContent        = d.total_rev;
+      document.getElementById('d-n').textContent          = d.n_channels;
       renderOutliers(d.outliers);
       renderRevTable(d.rev_rows);
       renderMomentum(d.top_momentum);
@@ -657,7 +706,7 @@ function loadChannel(name){
   CURRENT=name;
   document.getElementById('ch-status').textContent='Loading...';
   const sort=document.getElementById('sort-sel')?.value||'pub';
-  fetch(`/api/channel/${encodeURIComponent(name)}?time=${TIME}&sort=${sort}`)
+  fetch(`/api/channel/${encodeURIComponent(name)}?time=${TIME}&sort=${sort}&folder=${encodeURIComponent(FOLDER)}`)
     .then(r=>r.json())
     .then(d=>{
       CH_DATA=d;
@@ -683,15 +732,27 @@ function renderChBubbles(s, display){
 }
 
 // ── VIDEO TABLE ────────────────────────────────────────────
+let FILTERED_VIDS = [];
+
 function sortVids(sort){ if(CURRENT){ VID_PAGE=0; loadChannel(CURRENT); } }
 
+function filterVids(){
+  const q=(document.getElementById('vid-search')?.value||'').toLowerCase();
+  FILTERED_VIDS = q ? ALL_VIDS.filter(v=>(v.title||'').toLowerCase().includes(q)) : ALL_VIDS;
+  VID_PAGE=0; renderVids();
+}
+
 function renderVids(){
-  const slice=ALL_VIDS.slice(VID_PAGE*PER,(VID_PAGE+1)*PER);
+  const src = FILTERED_VIDS.length || document.getElementById('vid-search')?.value ? FILTERED_VIDS : ALL_VIDS;
+  const medVpd = CH_DATA?.median_vpd || 0;
+  const slice=src.slice(VID_PAGE*PER,(VID_PAGE+1)*PER);
   document.getElementById('vid-tbody').innerHTML = slice.length
     ? slice.map((v,i)=>{
         const globalIdx = VID_PAGE*PER+i;
         const thumb=v.thumbnail?`<img class="vt-thumb" src="${v.thumbnail}" loading="lazy">`:`<div class="vt-thumb-ph">▶</div>`;
         const badge=v.badge?`<span class="badge badge-${v.badge.toLowerCase()}">${v.badge}</span>`:'';
+        const vpd=parseFloat(v.vpd)||0;
+        const vel = medVpd===0?'→': vpd>medVpd*1.3?'<span style="color:var(--green)">↑</span>': vpd<medVpd*0.7?'<span style="color:var(--red)">↓</span>':'<span style="color:var(--muted)">→</span>';
         return `<tr style="cursor:pointer" onclick="openVidModal(${globalIdx})">
           <td style="padding:7px 8px;width:108px">${thumb}</td>
           <td class="vt-body">
@@ -703,15 +764,14 @@ function renderVids(){
           <td class="vt-num">${v.views}</td>
           <td class="vt-num hm">${v.likes}</td>
           <td class="vt-num hm">${v.comments}</td>
-          <td class="vt-num" style="color:var(--green)">${v.vpd}</td>
+          <td class="vt-num" style="color:var(--green)">${vel} ${v.vpd}</td>
           <td class="vt-num hm">${v.lr}</td>
-          <td class="vt-num hm">${v.cr}</td>
         </tr>`;
       }).join('')
-    : '<tr><td colspan="8" style="padding:16px;color:var(--muted);text-align:center">No videos in this time period</td></tr>';
+    : '<tr><td colspan="7" style="padding:16px;color:var(--muted);text-align:center">No videos in this time period</td></tr>';
 
-  const tp=Math.ceil(ALL_VIDS.length/PER)||1;
-  document.getElementById('pag-info').textContent=`Page ${VID_PAGE+1}/${tp} — ${ALL_VIDS.length} videos`;
+  const tp=Math.ceil(src.length/PER)||1;
+  document.getElementById('pag-info').textContent=`Page ${VID_PAGE+1}/${tp} — ${src.length} videos`;
   document.getElementById('pag-prev').disabled=VID_PAGE===0;
   document.getElementById('pag-next').disabled=VID_PAGE>=tp-1;
 }
@@ -804,7 +864,16 @@ function bubbleModal(type){
   const d=DASH_DATA;
   const rows = d.channel_rows || [];
   const labels = rows.map(r=>r.display);
-  if(type==='subs'){
+  if(type==='subgains'){
+    const periodLbl = TIME==='All'?'All Time':TIME;
+    openModal(`Subscriber Gains (${periodLbl})`,
+      mStat('Gained',d.sub_gains||'—')+mStat('Period',periodLbl),
+      ctx=>new Chart(ctx,{type:'bar',data:{
+        labels,
+        datasets:[{data:rows.map(r=>parseInt((r.sub_gain||'0').replace(/[^\d\-]/g,''))||0),
+          backgroundColor:'#00ff8828',borderColor:'#00ff88',borderWidth:2}]},
+        options:{...CD,responsive:true,maintainAspectRatio:false}}));
+  } else if(type==='subs'){
     openModal('Subscribers by Channel',
       mStat('Total',d.total_subs)+mStat('Channels',d.n_channels),
       ctx=>new Chart(ctx,{type:'bar',data:{
@@ -892,18 +961,37 @@ function chBubbleModal(type, display){
 }
 
 // ── REFRESH ────────────────────────────────────────────────
-function refreshAll(){
+async function refreshAll(){
   const btn=document.getElementById('refresh-btn');
-  btn.classList.add('loading'); btn.innerHTML='<span class="spin"></span> Refreshing...';
-  fetch('/api/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}' })
-    .then(r=>r.json())
-    .then(d=>{
+  btn.classList.add('loading');
+  // Get channel list from sidebar pills
+  const pills=[...document.querySelectorAll('.ch-pill')];
+  const names=pills.map(p=>p.dataset.ch).filter(Boolean);
+  if(!names.length){
+    // fallback: single bulk call
+    btn.innerHTML='<span class="spin"></span> Refreshing...';
+    try{
+      const d=await fetch('/api/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(r=>r.json());
       const ok=d.results.filter(r=>r.status==='ok').length;
       const err=d.results.filter(r=>r.status==='error').length;
       toast(err?`${ok} refreshed, ${err} errors`:`All ${ok} channels refreshed`,'ok');
       setTimeout(()=>location.reload(),800);
-    })
-    .catch(()=>{ toast('Refresh failed','err'); btn.classList.remove('loading'); btn.innerHTML='↺ Refresh All Channels'; });
+    }catch(e){ toast('Refresh failed','err'); }
+    btn.classList.remove('loading'); btn.innerHTML='↺ Refresh All Channels'; return;
+  }
+  let ok=0,err=0;
+  for(let i=0;i<names.length;i++){
+    const n=names[i];
+    btn.innerHTML=`<span class="spin"></span> ${i+1}/${names.length}: ${n.length>22?n.substring(0,22)+'…':n}`;
+    try{
+      const d=await fetch('/api/refresh',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channel_name:n})}).then(r=>r.json());
+      if((d.results||[]).some(r=>r.status==='ok')) ok++; else err++;
+      if(d.quota_exceeded) showQuotaBanner();
+    }catch(e){ err++; }
+  }
+  toast(err?`${ok} refreshed, ${err} errors`:`All ${ok} channels refreshed`,'ok');
+  btn.classList.remove('loading'); btn.innerHTML='↺ Refresh All Channels';
+  loadDashboard(); if(CURRENT) loadChannel(CURRENT);
 }
 
 function refreshCurrent(){
@@ -929,6 +1017,76 @@ function delChannel(name){ if(!confirm(`Remove "${name}"?`)) return;
   fetch('/api/channel/delete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})})
     .then(()=>{ toast('Removed','ok'); setTimeout(()=>location.reload(),500); }).catch(()=>toast('Failed','err')); }
 
+// ── ALL VIDEOS ─────────────────────────────────────────────
+let AV_PAGE=1, AV_TOTAL=0, AV_PER=30;
+let avSearchTimer=null;
+
+function loadAllVideos(page){
+  page=page||AV_PAGE;
+  AV_PAGE=page;
+  const q=(document.getElementById('av-search')?.value||'').trim();
+  const sort=document.getElementById('av-sort')?.value||'pub';
+  const url=`/api/all-videos?time=${TIME}&folder=${encodeURIComponent(FOLDER)}&sort=${sort}&page=${page}&per=${AV_PER}${q?'&q='+encodeURIComponent(q):''}`;
+  document.getElementById('av-tbody').innerHTML=`<tr><td colspan="7" style="padding:16px;color:var(--muted);text-align:center"><span class="spin"></span> Loading...</td></tr>`;
+  fetch(url).then(r=>r.json()).then(d=>{
+    AV_TOTAL=d.total||0;
+    const vids=d.videos||[];
+    document.getElementById('av-tbody').innerHTML=vids.length
+      ? vids.map((v,i)=>{
+          const thumb=v.thumbnail?`<img class="vt-thumb" src="${v.thumbnail}" loading="lazy">`:`<div class="vt-thumb-ph">▶</div>`;
+          const badge=v.badge?`<span class="badge badge-${v.badge.toLowerCase()}">${v.badge}</span>`:'';
+          return `<tr style="cursor:pointer" onclick="openAvModal(${JSON.stringify(v).replace(/"/g,'&quot;')})">
+            <td style="padding:7px 8px;width:108px">${thumb}</td>
+            <td class="vt-body">
+              <div class="vt-ch">${esc(v.channel||'')}</div>
+              <div class="vt-title">${esc(v.title)}</div>
+              <div class="vt-date">${v.published} · ${v.days}d ago</div>
+              ${badge}
+            </td>
+            <td class="vt-num">${v.views}</td>
+            <td class="vt-num hm">${v.likes}</td>
+            <td class="vt-num hm">${v.comments}</td>
+            <td class="vt-num" style="color:var(--green)">${v.vpd}</td>
+            <td class="vt-num hm">${v.lr}</td>
+          </tr>`;
+        }).join('')
+      : `<tr><td colspan="7" style="padding:16px;color:var(--muted);text-align:center">No videos found</td></tr>`;
+    const tp=Math.ceil(AV_TOTAL/AV_PER)||1;
+    document.getElementById('av-info').textContent=`Page ${page}/${tp} — ${AV_TOTAL} videos`;
+    document.getElementById('av-prev').disabled=page<=1;
+    document.getElementById('av-next').disabled=page>=tp;
+  }).catch(()=>{
+    document.getElementById('av-tbody').innerHTML=`<tr><td colspan="7" style="padding:16px;color:var(--red);text-align:center">Failed to load</td></tr>`;
+  });
+}
+
+function avPage(d){ loadAllVideos(AV_PAGE+d); }
+function avSearch(){ clearTimeout(avSearchTimer); avSearchTimer=setTimeout(()=>loadAllVideos(1),350); }
+
+function openAvModal(v){
+  if(typeof v==='string') v=JSON.parse(v.replace(/&quot;/g,'"'));
+  const badge=v.badge?`<span class="badge badge-${v.badge.toLowerCase()}" style="font-size:10px">${v.badge}</span>`:'';
+  document.getElementById('vid-modal-title').textContent=v.channel||'Video Details';
+  document.getElementById('vid-modal-body').innerHTML=`
+    ${v.thumbnail?`<img src="${v.thumbnail}" style="width:100%;border-radius:8px;margin-bottom:14px;display:block">`:''}
+    <div style="font-size:14px;font-weight:600;color:#fff;line-height:1.5;margin-bottom:6px">${esc(v.title)}</div>
+    <div style="font-size:11px;color:var(--red);font-weight:700;font-family:var(--mono);margin-bottom:4px">${esc(v.channel||'')}</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px">${v.published} &nbsp;·&nbsp; ${v.days} days ago &nbsp;${badge}</div>
+    <div class="modal-stat-row">
+      <div class="modal-stat"><div class="modal-stat-lbl">Views</div><div class="modal-stat-val" style="color:var(--red)">${v.views}</div></div>
+      <div class="modal-stat"><div class="modal-stat-lbl">Likes</div><div class="modal-stat-val" style="color:var(--blue)">${v.likes}</div></div>
+      <div class="modal-stat"><div class="modal-stat-lbl">Comments</div><div class="modal-stat-val" style="color:var(--gold)">${v.comments}</div></div>
+      <div class="modal-stat"><div class="modal-stat-lbl">Views / Day</div><div class="modal-stat-val" style="color:var(--green)">${v.vpd}</div></div>
+      <div class="modal-stat"><div class="modal-stat-lbl">Like Rate</div><div class="modal-stat-val">${v.lr}</div></div>
+    </div>
+    <a href="${v.url}" target="_blank" style="display:inline-block;margin-top:4px;padding:9px 20px;background:var(--red);color:#fff;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none;box-shadow:0 0 14px var(--rg)">▶ Watch on YouTube</a>
+  `;
+  document.getElementById('vid-modal-bg').classList.add('open');
+}
+
+// ── QUOTA BANNER ────────────────────────────────────────────
+function showQuotaBanner(){ document.getElementById('quota-banner').style.display='block'; }
+
 // ── NOTES ─────────────────────────────────────────────────
 function saveNotes(){
   fetch('/api/notes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channel_name:CURRENT,notes:document.getElementById('notes-area').value})})
@@ -942,8 +1100,9 @@ function toast(msg,type='ok'){ const t=document.getElementById('toast'); t.textC
 function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 
 // ── INIT ───────────────────────────────────────────────────
-setTime('All');
-loadDashboard();
+const savedTime = localStorage.getItem('yt_time') || 'All';
+TIME = savedTime;
+setTime(savedTime);  // sets chips + badge + loads dashboard + channel
 
 const firstCh = document.getElementById('ch-sel')?.options[0]?.value;
 if(firstCh){ CURRENT=firstCh; loadChannel(firstCh); }
