@@ -313,7 +313,7 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--font);min-hei
     <div class="bubble b-green" onclick="bubbleModal('subgains')" title="Click for details">
       <div class="b-lbl">Subs Gained <span id="d-subgains-period" style="color:var(--muted)">(All Time)</span></div>
       <div class="b-val" id="d-subgains">—</div>
-      <div class="b-sub">in selected period</div>
+      <div class="b-sub" id="d-subgains-sub">in selected period</div>
     </div>
     <div class="bubble b-blue"  onclick="bubbleModal('views')" title="Click for details">
       <div class="b-lbl">Views <span id="d-period-lbl" style="color:var(--muted)">(All Time)</span></div>
@@ -593,7 +593,8 @@ function loadDashboard(){
       if(d.quota_exceeded) showQuotaBanner();
       const periodLbl = TIME==='All'?'(All Time)':`(${TIME})`;
       document.getElementById('d-subs').textContent       = d.total_subs;
-      document.getElementById('d-subgains').textContent   = d.sub_gains||'—';
+      document.getElementById('d-subgains').textContent   = d.sub_gains || '+0';
+      document.getElementById('d-subgains-sub').textContent = (d.sub_gains_raw===0) ? 'refresh again later to track' : 'in selected period';
       document.getElementById('d-subgains-period').textContent = periodLbl;
       document.getElementById('d-views').textContent      = d.period_views || d.total_views;
       document.getElementById('d-period-lbl').textContent = periodLbl;
@@ -620,15 +621,18 @@ function renderAllChannels(rows){
     : '<tr><td colspan="6" style="padding:14px;color:var(--muted);text-align:center">No data — refresh channels</td></tr>';
 }
 
+let DASH_OUTLIERS = [];
+
 function renderOutliers(list){
+  DASH_OUTLIERS = list;
   const el=document.getElementById('d-outliers');
   if(!list.length){
     el.innerHTML='<div style="color:var(--muted);font-size:13px;padding:4px 0">No outliers detected — refresh channels to find videos spiking 2× above their median.</div>';
     return;
   }
-  el.innerHTML=list.map(o=>`
-    <div class="o-card">
-      <a href="${o.url}" target="_blank">${o.thumbnail?`<img class="o-thumb" src="${o.thumbnail}" loading="lazy">`:`<div class="o-thumb-ph">▶</div>`}</a>
+  el.innerHTML=list.map((o,i)=>`
+    <div class="o-card" style="cursor:pointer" onclick="openOutlierModal(${i})">
+      ${o.thumbnail?`<img class="o-thumb" src="${o.thumbnail}" loading="lazy">`:`<div class="o-thumb-ph">▶</div>`}
       <div class="o-body">
         <div class="o-badge">⚡ ${o.ratio}× above median</div>
         <div class="o-title">${esc(o.title)}</div>
@@ -641,6 +645,47 @@ function renderOutliers(list){
         </div>
       </div>
     </div>`).join('');
+}
+
+function openOutlierModal(i){
+  const o = DASH_OUTLIERS[i];
+  if(!o) return;
+  // Build a performance summary
+  const reasons = [];
+  if(parseFloat(o.lr) > 5) reasons.push(`High like rate (${o.lr}%) signals strong audience resonance — YouTube's algorithm favors videos with above-average engagement.`);
+  else if(parseFloat(o.lr) > 3) reasons.push(`Solid like rate (${o.lr}%) indicates the content resonates with viewers who find it.`);
+  if(o.days > 180) reasons.push(`At ${o.days} days old, this video continues to attract views well beyond its initial release — a sign of evergreen, searchable content.`);
+  else if(o.days > 60) reasons.push(`Still gaining traction at ${o.days} days old — likely being recommended by YouTube's algorithm or found via search.`);
+  if(o.ratio >= 5) reasons.push(`At ${o.ratio}× the channel median, this is a major outlier — it likely hit a topic with high search demand or was picked up by the algorithm.`);
+  else if(o.ratio >= 3) reasons.push(`Performing ${o.ratio}× above the channel's typical video — likely benefiting from a trending topic or strong thumbnail/title combination.`);
+  else reasons.push(`Performing ${o.ratio}× above the channel median of ${o.median_vpd} V/Day — this video is outpacing the channel's typical content.`);
+  if(parseInt((o.comments||'0').replace(/[^\d]/g,'')) > 100) reasons.push(`High comment count drives further algorithmic promotion — comments signal active community engagement.`);
+  const summary = reasons.join(' ');
+
+  document.getElementById('vid-modal-title').textContent = o.ch_display || 'Outlier Video';
+  document.getElementById('vid-modal-body').innerHTML = `
+    ${o.thumbnail ? `<img src="${o.thumbnail}" style="width:100%;border-radius:8px;margin-bottom:14px;display:block">` : ''}
+    <div style="font-size:14px;font-weight:600;color:#fff;line-height:1.5;margin-bottom:6px">${esc(o.title)}</div>
+    <div style="font-size:11px;color:var(--red);font-weight:700;font-family:var(--mono);margin-bottom:4px">${esc(o.ch_display)}</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px">${o.published || ''} &nbsp;·&nbsp; ${o.days} days ago</div>
+    <div class="modal-stat-row">
+      <div class="modal-stat"><div class="modal-stat-lbl">Views</div><div class="modal-stat-val" style="color:var(--red)">${o.views}</div></div>
+      <div class="modal-stat"><div class="modal-stat-lbl">Views / Day</div><div class="modal-stat-val" style="color:var(--green)">${o.vpd}</div></div>
+      <div class="modal-stat"><div class="modal-stat-lbl">Median V/Day</div><div class="modal-stat-val" style="color:var(--muted)">${o.median_vpd}</div></div>
+      <div class="modal-stat"><div class="modal-stat-lbl">Spike</div><div class="modal-stat-val" style="color:var(--green)">${o.ratio}×</div></div>
+    </div>
+    <div class="modal-stat-row">
+      <div class="modal-stat"><div class="modal-stat-lbl">Likes</div><div class="modal-stat-val" style="color:var(--blue)">${o.likes||'—'}</div></div>
+      <div class="modal-stat"><div class="modal-stat-lbl">Comments</div><div class="modal-stat-val" style="color:var(--gold)">${o.comments||'—'}</div></div>
+      <div class="modal-stat"><div class="modal-stat-lbl">Like Rate</div><div class="modal-stat-val">${o.lr}%</div></div>
+    </div>
+    <div style="background:rgba(0,255,136,.05);border:1px solid rgba(0,255,136,.15);border-radius:8px;padding:12px 14px;margin-top:8px;margin-bottom:12px">
+      <div style="font-size:9px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;font-family:var(--mono)">⚡ Why This Video Is Outperforming</div>
+      <div style="font-size:12px;color:#ccc;line-height:1.6">${summary}</div>
+    </div>
+    <a href="${o.url}" target="_blank" style="display:inline-block;margin-top:4px;padding:9px 20px;background:var(--red);color:#fff;border-radius:7px;font-size:12px;font-weight:700;text-decoration:none;box-shadow:0 0 14px var(--rg)">▶ Watch on YouTube</a>
+  `;
+  document.getElementById('vid-modal-bg').classList.add('open');
 }
 
 function renderRevTable(rows){

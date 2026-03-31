@@ -184,10 +184,16 @@ def detect_outliers(channels, preset="All"):
                     "url":        v.get("url",""),
                     "thumbnail":  v.get("thumbnail",""),
                     "views":      fmt(v.get("views",0)),
+                    "views_raw":  v.get("views",0),
                     "vpd":        f"{v.get('views_per_day',0):.0f}",
+                    "vpd_raw":    round(v.get("views_per_day",0),1),
+                    "median_vpd": round(median_vpd,1),
                     "days":       v.get("days_since_publish",0),
                     "ratio":      round(ratio,1),
                     "lr":         f"{v.get('like_rate',0):.2f}",
+                    "likes":      fmt(v.get("likes",0)),
+                    "comments":   fmt(v.get("comments",0)),
+                    "published":  v.get("published",""),
                 })
     outliers.sort(key=lambda x: x["ratio"], reverse=True)
     return outliers[:12]
