@@ -427,7 +427,7 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--font);min-hei
           <thead><tr>
             <th style="width:108px">Thumb</th><th>Title</th>
             <th>Views</th><th class="hm">Likes</th><th class="hm">Cmt</th>
-            <th>V/Day</th><th class="hm">Like%</th><th class="hm">Cmt%</th>
+            <th>V/Day</th><th class="hm">Like%</th>
           </tr></thead>
           <tbody id="vid-tbody"><tr><td colspan="8" style="padding:16px;color:var(--muted);text-align:center">Select a channel</td></tr></tbody>
         </table>
@@ -757,7 +757,8 @@ function loadChannel(name){
       CH_DATA=d;
       document.getElementById('ch-status').textContent=`Updated: ${d.refreshed}`;
       renderChBubbles(d.stats, d.display);
-      ALL_VIDS=d.videos; VID_PAGE=0;
+      ALL_VIDS=d.videos; FILTERED_VIDS=[]; VID_PAGE=0;
+      if(document.getElementById('vid-search')) document.getElementById('vid-search').value='';
       renderVids();
       renderCharts(d.charts);
       document.getElementById('notes-area').value=d.notes||'';
@@ -787,8 +788,11 @@ function filterVids(){
   VID_PAGE=0; renderVids();
 }
 
+let VID_SRC = []; // current display source for video modal lookups
+
 function renderVids(){
   const src = FILTERED_VIDS.length || document.getElementById('vid-search')?.value ? FILTERED_VIDS : ALL_VIDS;
+  VID_SRC = src;
   const medVpd = CH_DATA?.median_vpd || 0;
   const slice=src.slice(VID_PAGE*PER,(VID_PAGE+1)*PER);
   document.getElementById('vid-tbody').innerHTML = slice.length
@@ -824,7 +828,7 @@ function chPage(d){ VID_PAGE+=d; renderVids(); }
 
 // ── VIDEO MODAL ────────────────────────────────────────────
 function openVidModal(idx){
-  const v = ALL_VIDS[idx];
+  const v = VID_SRC[idx];
   if(!v) return;
   const badge = v.badge ? `<span class="badge badge-${v.badge.toLowerCase()}" style="font-size:10px">${v.badge}</span>` : '';
   document.getElementById('vid-modal-title').textContent = v.channel || 'Video Details';
@@ -1076,11 +1080,12 @@ function loadAllVideos(page){
   fetch(url).then(r=>r.json()).then(d=>{
     AV_TOTAL=d.total||0;
     const vids=d.videos||[];
+    window._avVids=vids;
     document.getElementById('av-tbody').innerHTML=vids.length
       ? vids.map((v,i)=>{
           const thumb=v.thumbnail?`<img class="vt-thumb" src="${v.thumbnail}" loading="lazy">`:`<div class="vt-thumb-ph">▶</div>`;
           const badge=v.badge?`<span class="badge badge-${v.badge.toLowerCase()}">${v.badge}</span>`:'';
-          return `<tr style="cursor:pointer" onclick="openAvModal(${JSON.stringify(v).replace(/"/g,'&quot;')})">
+          return `<tr style="cursor:pointer" onclick="openAvModal(${i})">
             <td style="padding:7px 8px;width:108px">${thumb}</td>
             <td class="vt-body">
               <div class="vt-ch">${esc(v.channel||'')}</div>
@@ -1108,8 +1113,9 @@ function loadAllVideos(page){
 function avPage(d){ loadAllVideos(AV_PAGE+d); }
 function avSearch(){ clearTimeout(avSearchTimer); avSearchTimer=setTimeout(()=>loadAllVideos(1),350); }
 
-function openAvModal(v){
-  if(typeof v==='string') v=JSON.parse(v.replace(/&quot;/g,'"'));
+function openAvModal(i){
+  const v = window._avVids?.[i];
+  if(!v) return;
   const badge=v.badge?`<span class="badge badge-${v.badge.toLowerCase()}" style="font-size:10px">${v.badge}</span>`:'';
   document.getElementById('vid-modal-title').textContent=v.channel||'Video Details';
   document.getElementById('vid-modal-body').innerHTML=`

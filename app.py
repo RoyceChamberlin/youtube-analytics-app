@@ -642,7 +642,8 @@ def api_refresh():
             results.append({"name":name,"status":"ok","display":stats.get("channel_name",name)})
         except Exception as e:
             results.append({"name":name,"status":"error","msg":str(e)})
-    return jsonify({"results":results})
+    quota_hit = any("QUOTA_EXCEEDED" in r.get("msg","") for r in results if r["status"]=="error")
+    return jsonify({"results":results,"quota_exceeded":quota_hit})
 
 @app.route("/api/channel/add", methods=["POST"])
 def api_add_channel():
